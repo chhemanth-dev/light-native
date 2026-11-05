@@ -11,7 +11,6 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk        rootProject.ext.compileSdkVersion
 
-    // namespace replaces the deprecated package="" in AndroidManifest.xml
     namespace "com.lightnative.app"
 
     defaultConfig {
@@ -72,17 +71,15 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 
-    // ─── Expo modules ────────────────────────────────────────────────────────
-    // expo-modules-core supplies ReactActivityDelegateWrapper,
-    // ReactNativeHostWrapper, ApplicationLifecycleDispatcher, and the
-    // generated BuildConfig that MainActivity / MainApplication import.
-    implementation project(':expo-modules-core')
+    // Expo modules core — provides ReactNativeHostWrapper, ReactActivityDelegateWrapper,
+    // ApplicationLifecycleDispatcher. Must be a Maven dep, NOT a project() reference.
+    implementation("expo.modules:expo-modules-core:2.2.0")
 
-    // ─── Kotlin ──────────────────────────────────────────────────────────────
+    // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // ─── AndroidX ────────────────────────────────────────────────────────────
+    // AndroidX
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 }
