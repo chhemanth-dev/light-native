@@ -1,0 +1,4 @@
+# Ignore nothing in android/ — we want our hand-written files uploaded
+# This file intentionally left minimal so EAS picks up the full android/ folder
+.git
+node_modules

@@ -1,0 +1,84 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+    autolinkLibrariesWithApp()
+}
+
+android {
+    ndkVersion        rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk        rootProject.ext.compileSdkVersion
+
+    namespace "com.lightnative.app"
+
+    defaultConfig {
+        applicationId "com.lightnative.app"
+        minSdk         rootProject.ext.minSdkVersion
+        targetSdk      rootProject.ext.targetSdkVersion
+        versionCode    1
+        versionName    "1.0.0"
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        debug {
+            storeFile     file('debug.keystore')
+            storePassword 'android'
+            keyAlias      'androiddebugkey'
+            keyPassword   'android'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            // Keep ProGuard OFF — Hermes handles JS; ProGuard can silently break RN bridges
+            minifyEnabled    false
+            shrinkResources  false
+            signingConfig    signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lint {
+        // Don't fail the build on lint errors — some Expo libraries have lint warnings
+        abortOnError          false
+        checkReleaseBuilds    false
+    }
+
+    packaging {
+        // Avoid duplicate native library errors from multiple React Native dependencies
+        jniLibs {
+            pickFirsts += ["**/libjsc.so", "**/libhermes.so"]
+        }
+    }
+}
+
+dependencies {
+    // React Native core
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+
+    // Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // AndroidX
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}
