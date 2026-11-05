@@ -11,6 +11,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk        rootProject.ext.compileSdkVersion
 
+    // namespace replaces the deprecated package="" in AndroidManifest.xml
     namespace "com.lightnative.app"
 
     defaultConfig {
@@ -39,10 +40,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Keep ProGuard OFF — Hermes handles JS; ProGuard can silently break RN bridges
-            minifyEnabled    false
-            shrinkResources  false
-            signingConfig    signingConfigs.debug
+            minifyEnabled   false
+            shrinkResources false
+            signingConfig   signingConfigs.debug
         }
     }
 
@@ -56,13 +56,11 @@ android {
     }
 
     lint {
-        // Don't fail the build on lint errors — some Expo libraries have lint warnings
-        abortOnError          false
-        checkReleaseBuilds    false
+        abortOnError       false
+        checkReleaseBuilds false
     }
 
     packaging {
-        // Avoid duplicate native library errors from multiple React Native dependencies
         jniLibs {
             pickFirsts += ["**/libjsc.so", "**/libhermes.so"]
         }
@@ -74,11 +72,17 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 
-    // Kotlin
+    // ─── Expo modules ────────────────────────────────────────────────────────
+    // expo-modules-core supplies ReactActivityDelegateWrapper,
+    // ReactNativeHostWrapper, ApplicationLifecycleDispatcher, and the
+    // generated BuildConfig that MainActivity / MainApplication import.
+    implementation project(':expo-modules-core')
+
+    // ─── Kotlin ──────────────────────────────────────────────────────────────
     implementation("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // AndroidX
+    // ─── AndroidX ────────────────────────────────────────────────────────────
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 }

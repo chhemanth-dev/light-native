@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.lightnative.app">
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Core -->
+    <!-- Core network -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Microphone & speech -->
+    <!-- Microphone & speech recognition -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -29,7 +28,7 @@
     <!-- Boot receiver — restart wake-word service after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Notification listener (protected; declared but granted in Settings by user) -->
+    <!-- Notification listener (user grants this in Android Settings) -->
     <uses-permission
         android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
         tools:ignore="ProtectedPermissions" />
@@ -45,7 +44,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true">
 
-        <!-- Disable Expo Updates (bare workflow, not using OTA updates) -->
+        <!-- Disable Expo OTA updates (bare workflow) -->
         <meta-data android:name="expo.modules.updates.ENABLED" android:value="false" />
 
         <activity
@@ -61,13 +60,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Wake-word foreground service — needs microphone type declared for Android 14+ -->
+        <!-- Wake-word foreground service (microphone type required for Android 14+) -->
         <service
             android:name=".WakeWordForegroundService"
             android:foregroundServiceType="microphone"
             android:exported="false" />
 
-        <!-- Notification listener service — reads all app notifications -->
+        <!-- Notification listener service -->
         <service
             android:name=".LightNotificationService"
             android:label="Light Notification Listener"
@@ -76,12 +75,9 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
-            <meta-data
-                android:name="android.service.notification.default_filter_types"
-                android:value="conversations,alerting" />
         </service>
 
-        <!-- Boot receiver — restarts wake-word service after device reboot or app update -->
+        <!-- Boot receiver — restarts wake-word after reboot / app update -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
