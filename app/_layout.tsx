@@ -8,7 +8,7 @@ import { StyleSheet, View, Text, Pressable } from "react-native";
 import * as Notifications from "expo-notifications";
 import { isSetupDone } from "../src/lib/vault";
 import { getDb } from "../src/lib/db";
-import { useAppStore } from "../store/appStore";
+import { useAppStore } from "../src/store/appStore";
 import { router } from "expo-router";
 
 export default function RootLayout() {
