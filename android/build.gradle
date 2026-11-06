@@ -12,7 +12,6 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // AGP 8.5.2 is compatible with Gradle 8.8
         classpath("com.android.tools.build:gradle:8.5.2")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
@@ -26,9 +25,6 @@ allprojects {
         google()
         mavenCentral()
         maven { url "https://www.jitpack.io" }
-        // Expo Maven repo — required for expo-modules-core and other Expo packages
-        maven {
-            url "$rootDir/../node_modules/expo-modules-core/android/maven"
-        }
+        maven { url "$rootDir/../node_modules/react-native/android" }
     }
 }
