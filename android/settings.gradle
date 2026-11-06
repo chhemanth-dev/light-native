@@ -14,8 +14,8 @@ rootProject.name = 'LightNative'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
 
-// expo-modules-core must be included as a project so its native .so files
-// are compiled and included in the APK. We do NOT import its classes in
-// Kotlin — autolinking handles package registration via PackageList.
+// expo-modules-core is a dependency of the expo package and all other Expo
+// modules. It must be explicitly included as a project — autolinking doesn't
+// pick it up because it's the core, not an individual module.
 include ':expo-modules-core'
 project(':expo-modules-core').projectDir = new File(rootProject.projectDir, '../node_modules/expo-modules-core/android')
