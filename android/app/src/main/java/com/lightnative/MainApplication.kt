@@ -39,25 +39,9 @@ class MainApplication : Application(), ReactApplication {
         if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
             load()
         }
-        // Initialize Expo modules via reflection — avoids compile-time dependency
-        // on expo-modules-core while still initializing Expo at runtime
-        try {
-            val dispatcher = Class.forName("expo.modules.ApplicationLifecycleDispatcher")
-            val method = dispatcher.getDeclaredMethod("onApplicationCreate", Application::class.java)
-            method.invoke(dispatcher.getDeclaredField("INSTANCE").get(null), this)
-        } catch (e: Exception) {
-            // Expo modules not available — app will work without them
-        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        try {
-            val dispatcher = Class.forName("expo.modules.ApplicationLifecycleDispatcher")
-            val method = dispatcher.getDeclaredMethod("onConfigurationChanged", Application::class.java, Configuration::class.java)
-            method.invoke(dispatcher.getDeclaredField("INSTANCE").get(null), this, newConfig)
-        } catch (e: Exception) {
-            // ignore
-        }
     }
 }
