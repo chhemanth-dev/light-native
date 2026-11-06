@@ -71,6 +71,11 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 
+    // expo-modules-core — needed for native .so files and runtime classes.
+    // We don't import its classes in Kotlin, but the .so files and classes
+    // must be in the APK for Expo modules (expo-router, expo-sqlite, etc.) to work.
+    implementation project(':expo-modules-core')
+
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
