@@ -1,6 +1,5 @@
-package com.lightnative
+package com.lightnative.app
 
-import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
 import android.text.TextUtils
@@ -17,30 +16,21 @@ class NotificationListenerModule(
     fun isEnabled(promise: Promise) {
         try {
             val pkgName = reactContext.packageName
-            val flat = Settings.Secure.getString(
-                reactContext.contentResolver,
-                "enabled_notification_listeners"
-            )
+            val flat = Settings.Secure.getString(reactContext.contentResolver, "enabled_notification_listeners")
             promise.resolve(!TextUtils.isEmpty(flat) && flat.contains(pkgName))
-        } catch (e: Exception) {
-            promise.resolve(false)
-        }
+        } catch (e: Exception) { promise.resolve(false) }
     }
 
     @ReactMethod
     fun openSettings() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
         reactContext.startActivity(intent)
     }
 
     @ReactMethod
     fun getActive(promise: Promise) {
         val service = LightNotificationService.instance
-        if (service == null) {
-            promise.resolve(Arguments.createArray())
-            return
-        }
+        if (service == null) { promise.resolve(Arguments.createArray()); return }
         try {
             val list = Arguments.createArray()
             for (sbn in service.activeNotifications) {
@@ -56,15 +46,13 @@ class NotificationListenerModule(
                 list.pushMap(map)
             }
             promise.resolve(list)
-        } catch (e: Exception) {
-            promise.resolve(Arguments.createArray())
-        }
+        } catch (e: Exception) { promise.resolve(Arguments.createArray()) }
     }
 
     fun sendEvent(params: WritableMap) {
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("onNotification", params)
+        try {
+            reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("onNotification", params)
+        } catch (e: Exception) { }
     }
 
     @ReactMethod fun addListener(eventName: String) {}
