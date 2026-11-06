@@ -14,7 +14,7 @@ android {
     namespace "com.lightnative.app"
 
     defaultConfig {
-        applicationId "com.lightnative.app"
+        applicationId  "com.lightnative.app"
         minSdk         rootProject.ext.minSdkVersion
         targetSdk      rootProject.ext.targetSdkVersion
         versionCode    1
