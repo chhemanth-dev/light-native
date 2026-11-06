@@ -1,27 +1,22 @@
 /**
  * Root layout — handles first-run setup and lock-screen routing.
- *
- * KEY FIX: router.replace() is called in a SEPARATE useEffect that fires
- * only AFTER `ready` becomes true, i.e. after the <Stack> tree is mounted.
- * Calling it in the same effect that sets state caused "Attempted to
- * navigate before mounting the Root Layout" on Android.
  */
 import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, Text, Pressable } from "react-native";
 import * as Notifications from "expo-notifications";
 import { isSetupDone } from "../src/lib/vault";
 import { getDb } from "../src/lib/db";
-import { useAppStore } from "../src/store/appStore";
+import { useAppStore } from "../store/appStore";
 import { router } from "expo-router";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<"/setup" | "/lock" | null>(null);
+  const [error, setError] = useState(false);
   const { setSetupDone, setLocked } = useAppStore();
 
-  // Step 1 — initialise DB and decide which route to start on
   useEffect(() => {
     (async () => {
       try {
@@ -35,7 +30,7 @@ export default function RootLayout() {
           setInitialRoute("/lock");
         }
       } catch {
-        // Secure store failure on first run — go to setup
+        // If anything fails, go to setup so the user isn't stuck
         setInitialRoute("/setup");
       } finally {
         setReady(true);
@@ -43,14 +38,12 @@ export default function RootLayout() {
     })();
   }, []);
 
-  // Step 2 — navigate only once the <Stack> is rendered
   useEffect(() => {
     if (ready && initialRoute) {
       router.replace(initialRoute);
     }
   }, [ready, initialRoute]);
 
-  // Handle notification tap (reminder fired while app was closed)
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
@@ -61,7 +54,25 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Show blank dark screen while initialising — prevents white flash
+  // Error fallback — if something goes wrong, show a retry button
+  if (error) {
+    return (
+      <GestureHandlerRootView style={styles.root}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Something went wrong starting Light.</Text>
+          <Pressable style={styles.retryBtn} onPress={() => {
+            setError(false);
+            setReady(false);
+            // Reload the window
+            if (typeof window !== "undefined") window.location.reload();
+          }}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      </GestureHandlerRootView>
+    );
+  }
+
   if (!ready) {
     return (
       <GestureHandlerRootView style={styles.root}>
@@ -83,4 +94,13 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#050810" },
+  errorContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20 },
+  errorText: { color: "#64748B", fontSize: 14, textAlign: "center" },
+  retryBtn: {
+    backgroundColor: "#1D4ED8",
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  retryText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });

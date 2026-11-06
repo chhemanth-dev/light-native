@@ -45,7 +45,9 @@ export default function RemindersScreen() {
   }
 
   async function handleReadAll() {
-    speak(formatRemindersForSpeech(reminders));
+    try {
+      speak(formatRemindersForSpeech(reminders)).catch(() => {});
+    } catch { /* ignore */ }
   }
 
   function formatFireAt(ts: number) {

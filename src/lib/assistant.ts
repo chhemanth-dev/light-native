@@ -1,6 +1,5 @@
 /**
  * Assistant orchestrator — ties together AI, voice, messages, reminders.
- * This is the brain that decides what to do when Light hears a command.
  */
 import { ask, type AIMessage } from "./gemini";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
@@ -55,9 +54,6 @@ export class LightAssistant {
     this.setState("idle");
   }
 
-  /**
-   * Main entry point — process voice input text.
-   */
   async handleInput(userText: string) {
     if (!userText.trim()) return;
 
@@ -65,7 +61,6 @@ export class LightAssistant {
     this.emit({ type: "transcript", text: userText });
 
     try {
-      // Save user turn
       if (this.sessionId) {
         await saveTurn({
           session_id: this.sessionId,
@@ -75,24 +70,18 @@ export class LightAssistant {
         });
       }
 
-      // Intercept known intents locally first (faster + works offline)
       const localResponse = await this.handleLocalIntent(userText);
       if (localResponse) {
         await this.respond(localResponse, true);
         return;
       }
 
-      // Build context from messages for AI
       const context = await this.buildContext(userText);
-
-      // Add to history
       this.history.push({ role: "user", content: userText });
 
-      // Ask AI (Gemini Nano or offline fallback)
       const { text, offline } = await ask(this.history, context);
       this.history.push({ role: "assistant", content: text });
 
-      // Trim history to last 10 turns to avoid prompt overflow
       if (this.history.length > 20) {
         this.history = this.history.slice(-20);
       }
@@ -102,7 +91,9 @@ export class LightAssistant {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       this.setState("error");
       this.emit({ type: "error", message: msg });
-      await this.respond("I encountered an error, sir. Please try again.", true);
+      // Don't try to speak the error message — just go idle
+      // (speaking might be what caused the error)
+      setTimeout(() => this.setState("idle"), 2000);
     }
   }
 
@@ -110,15 +101,20 @@ export class LightAssistant {
     this.setState("speaking");
     this.emit({ type: "response", text, offline });
 
-    if (this.sessionId) {
-      await saveTurn({
-        session_id: this.sessionId,
-        role: "assistant",
-        content: text,
-        timestamp: Date.now(),
-      });
+    try {
+      if (this.sessionId) {
+        await saveTurn({
+          session_id: this.sessionId,
+          role: "assistant",
+          content: text,
+          timestamp: Date.now(),
+        });
+      }
+    } catch {
+      // DB might not be ready — ignore
     }
 
+    // speak() now has its own error handling that fires onDone on failure
     await new Promise<void>((resolve) => {
       speak(text, {
         onDone: () => {
@@ -133,53 +129,56 @@ export class LightAssistant {
     });
   }
 
-  /**
-   * Handle known intents without calling AI — instant + offline.
-   */
   private async handleLocalIntent(text: string): Promise<string | null> {
     const lower = text.toLowerCase().trim();
 
-    // --- READ MESSAGES ---
+    // READ MESSAGES
     if (
       lower.match(/\b(messages?|notifications?|updates?|whatsapp|gmail|instagram|emails?)\b/) &&
       lower.match(/\b(read|show|tell|what|any|check|have i|do i)\b/)
     ) {
-      const unread = await getUnreadMessages();
-      await markAllRead();
-      return formatMessagesForSpeech(
-        unread.map((m) => ({
-          app_name: m.app_name,
-          sender: m.sender,
-          content: m.content,
-        }))
-      );
+      try {
+        const unread = await getUnreadMessages();
+        await markAllRead();
+        return formatMessagesForSpeech(
+          unread.map((m) => ({
+            app_name: m.app_name,
+            sender: m.sender,
+            content: m.content,
+          }))
+        );
+      } catch {
+        return "I couldn't retrieve your messages, sir.";
+      }
     }
 
-    // --- SET REMINDER ---
-    if (
-      lower.match(/\b(remind|reminder|alarm|alert)\b/)
-    ) {
+    // SET REMINDER
+    if (lower.match(/\b(remind|reminder|alarm|alert)\b/)) {
       const parsed = parseReminderFromSpeech(text);
       if (parsed) {
         try {
           await scheduleReminder(parsed);
           return formatReminderConfirmation(parsed.title, parsed.fireAt);
         } catch {
-          return "I'm sorry, sir. I couldn't schedule that reminder. Please check notification permissions.";
+          return "I'm sorry, sir. I couldn't schedule that reminder.";
         }
       }
     }
 
-    // --- LIST REMINDERS ---
+    // LIST REMINDERS
     if (
       lower.match(/\b(reminders?|upcoming|schedule|what.*remind)\b/) &&
       lower.match(/\b(list|show|what|tell|any|have i)\b/)
     ) {
-      const reminders = await getPendingReminders();
-      return formatRemindersForSpeech(reminders);
+      try {
+        const reminders = await getPendingReminders();
+        return formatRemindersForSpeech(reminders);
+      } catch {
+        return "I couldn't retrieve your reminders, sir.";
+      }
     }
 
-    // --- TIME ---
+    // TIME
     if (lower.match(/\bwhat(?:'s| is) the time\b/) || lower === "time") {
       const t = new Date().toLocaleTimeString("en-GB", {
         hour: "2-digit",
@@ -188,7 +187,7 @@ export class LightAssistant {
       return `The time is ${t}, sir.`;
     }
 
-    // --- DATE ---
+    // DATE
     if (lower.match(/\bwhat(?:'s| is).*date\b/) || lower === "date" || lower === "what day is it") {
       const d = new Date().toLocaleDateString("en-GB", {
         weekday: "long",
@@ -199,58 +198,57 @@ export class LightAssistant {
       return `Today is ${d}, sir.`;
     }
 
-    // --- FORGET / CLEAR HISTORY ---
+    // FORGET HISTORY
     if (lower.match(/\b(forget|clear|wipe|delete).*(history|conversation|chat)\b/)) {
       if (this.sessionId) {
-        await forgetSession(this.sessionId);
+        try { await forgetSession(this.sessionId); } catch { /* ignore */ }
         this.history = [];
       }
       return "Done, sir. I've cleared our conversation history.";
     }
 
-    // --- STOP / CANCEL ---
+    // STOP
     if (lower === "stop" || lower === "cancel" || lower === "nevermind" || lower === "never mind") {
       await stopSpeaking();
       this.setState("idle");
-      return null; // Handled silently
+      return null;
     }
 
-    return null; // Not a local intent — pass to AI
+    return null;
   }
 
-  /**
-   * Build relevant context string for the AI from local data.
-   */
   private async buildContext(userText: string): Promise<string> {
     const lower = userText.toLowerCase();
     const parts: string[] = [];
 
-    // Include unread messages if user is asking about them
-    if (lower.match(/\b(message|notification|email|whatsapp|instagram|gmail)\b/)) {
-      const msgs = await getUnreadMessages();
-      if (msgs.length > 0) {
-        parts.push(
-          "Unread messages:\n" +
-            msgs
-              .slice(0, 8)
-              .map((m) => `[${m.app_name}] ${m.sender}: ${m.content.slice(0, 200)}`)
-              .join("\n")
-        );
+    try {
+      if (lower.match(/\b(message|notification|email|whatsapp|instagram|gmail)\b/)) {
+        const msgs = await getUnreadMessages();
+        if (msgs.length > 0) {
+          parts.push(
+            "Unread messages:\n" +
+              msgs
+                .slice(0, 8)
+                .map((m) => `[${m.app_name}] ${m.sender}: ${m.content.slice(0, 200)}`)
+                .join("\n")
+          );
+        }
       }
-    }
 
-    // Include reminders if user is asking about schedule
-    if (lower.match(/\b(remind|reminder|schedule|plan|todo)\b/)) {
-      const reminders = await getPendingReminders();
-      if (reminders.length > 0) {
-        parts.push(
-          "Upcoming reminders:\n" +
-            reminders
-              .slice(0, 5)
-              .map((r) => `${r.title} at ${new Date(r.fire_at).toLocaleString("en-GB")}`)
-              .join("\n")
-        );
+      if (lower.match(/\b(remind|reminder|schedule|plan|todo)\b/)) {
+        const reminders = await getPendingReminders();
+        if (reminders.length > 0) {
+          parts.push(
+            "Upcoming reminders:\n" +
+              reminders
+                .slice(0, 5)
+                .map((r) => `${r.title} at ${new Date(r.fire_at).toLocaleString("en-GB")}`)
+                .join("\n")
+          );
+        }
       }
+    } catch {
+      // DB not ready — return empty context
     }
 
     return parts.join("\n\n");

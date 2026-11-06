@@ -2,7 +2,7 @@
  * Lock screen — shown every time the app opens.
  * User unlocks via biometrics (fingerprint/face) or PIN.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput, Alert,
 } from "react-native";
@@ -14,35 +14,33 @@ export default function LockScreen() {
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(false);
   const [ownerName, setOwnerName] = useState("there");
+  const [verifying, setVerifying] = useState(false);
   const { setLocked, setOwnerName: storeSetOwner } = useAppStore();
+  const triedBiometrics = useRef(false);
 
   useEffect(() => {
     getOwnerName().then((n) => {
       setOwnerName(n);
       storeSetOwner(n);
-    });
-    tryBiometrics();
+    }).catch(() => {});
+    if (!triedBiometrics.current) {
+      triedBiometrics.current = true;
+      tryBiometrics();
+    }
   }, []);
 
   async function tryBiometrics() {
-    const available = await hasBiometrics();
-    if (!available) {
+    try {
+      const available = await hasBiometrics();
+      if (!available) {
+        setShowPin(true);
+        return;
+      }
+      const ok = await authenticateWithBiometrics();
+      if (ok) unlock();
+      else setShowPin(true);
+    } catch {
       setShowPin(true);
-      return;
-    }
-    const ok = await authenticateWithBiometrics();
-    if (ok) unlock();
-    else setShowPin(true);
-  }
-
-  async function handlePin() {
-    if (pin.length !== 4) return;
-    const ok = await verifyPin(pin);
-    if (ok) {
-      unlock();
-    } else {
-      Alert.alert("Wrong PIN", "Please try again.");
-      setPin("");
     }
   }
 
@@ -51,13 +49,31 @@ export default function LockScreen() {
     router.replace("/(tabs)");
   }
 
+  async function submitPin(value: string) {
+    if (verifying || value.length !== 4) return;
+    setVerifying(true);
+    try {
+      const ok = await verifyPin(value);
+      if (ok) {
+        unlock();
+      } else {
+        Alert.alert("Wrong PIN", "Please try again.");
+        setPin("");
+      }
+    } catch {
+      Alert.alert("Error", "Could not verify PIN. Please try again.");
+      setPin("");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <View style={styles.root}>
-      {/* Lock orb */}
       <View style={styles.orb} />
 
       <Text style={styles.greeting}>{greeting},</Text>
@@ -73,15 +89,7 @@ export default function LockScreen() {
               const digits = t.replace(/\D/g, "").slice(0, 4);
               setPin(digits);
               if (digits.length === 4) {
-                setTimeout(() => {
-                  verifyPin(digits).then((ok) => {
-                    if (ok) unlock();
-                    else {
-                      Alert.alert("Wrong PIN", "Please try again.");
-                      setPin("");
-                    }
-                  });
-                }, 100);
+                submitPin(digits);
               }
             }}
             keyboardType="number-pad"

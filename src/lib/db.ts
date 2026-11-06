@@ -9,11 +9,17 @@ let _db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync("light.db");
-  await _db.execAsync(`PRAGMA journal_mode = WAL;`);
-  await _db.execAsync(`PRAGMA foreign_keys = ON;`);
-  await initSchema(_db);
-  return _db;
+  try {
+    _db = await SQLite.openDatabaseAsync("light.db");
+    await _db.execAsync(`PRAGMA journal_mode = WAL;`);
+    await _db.execAsync(`PRAGMA foreign_keys = ON;`);
+    await initSchema(_db);
+    return _db;
+  } catch (e) {
+    // Reset so the next call tries again
+    _db = null;
+    throw e;
+  }
 }
 
 async function initSchema(db: SQLite.SQLiteDatabase) {

@@ -45,13 +45,16 @@ export default function MessagesScreen() {
   }, []);
 
   async function handleReadAll() {
-    await markAllRead();
-    await load();
-    speak(formatMessagesForSpeech(messages.slice(0, 5).map((m) => ({
-      app_name: m.app_name,
-      sender: m.sender,
-      content: m.content,
-    }))));
+    try {
+      const unread = messages.filter((m) => m.read === 0);
+      await markAllRead();
+      await load();
+      speak(formatMessagesForSpeech(unread.slice(0, 5).map((m) => ({
+        app_name: m.app_name,
+        sender: m.sender,
+        content: m.content,
+      })))).catch(() => {});
+    } catch { /* ignore */ }
   }
 
   function appColor(appName: string) {

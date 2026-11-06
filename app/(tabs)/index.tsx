@@ -119,15 +119,19 @@ export default function HomeScreen() {
   }, [lastResponse]);
 
   async function handleOrbPress() {
-    if (assistantState !== "idle") {
-      endCurrentSession();
-      return;
+    try {
+      if (assistantState !== "idle") {
+        endCurrentSession();
+        return;
+      }
+      const hasMic = micGranted || (await askMicPermission());
+      if (!hasMic) return;
+      setMicGranted(true);
+      await beginSession();
+      await startListening();
+    } catch {
+      // Silently ignore — user can tap again
     }
-    const hasMic = micGranted || (await askMicPermission());
-    if (!hasMic) return;
-    setMicGranted(true);
-    await beginSession();
-    await startListening();
   }
 
   const hour = new Date().getHours();
