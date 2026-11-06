@@ -71,10 +71,6 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 
-    // Expo modules core — provides ReactNativeHostWrapper, ReactActivityDelegateWrapper,
-    // ApplicationLifecycleDispatcher. Required for Expo modules to work at runtime.
-    implementation project(':expo-modules-core')
-
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
