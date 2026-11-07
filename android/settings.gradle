@@ -6,11 +6,11 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 
-extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+react {
   if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
-    ex.autolinkLibrariesFromCommand()
+    autolinkLibrariesFromCommand()
   } else {
-    def command = [
+    autolinkLibrariesFromCommand([
       'node',
       '--no-warnings',
       '--eval',
@@ -19,8 +19,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
       '--json',
       '--platform',
       'android'
-    ].toList()
-    ex.autolinkLibrariesFromCommand(command)
+    ])
   }
 }
 

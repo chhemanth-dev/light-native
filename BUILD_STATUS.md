@@ -1,90 +1,107 @@
-# Android Build Status - Expo SDK 52 + React Native 0.76
+# Android Build Status
 
-## Current Status: ❌ BLOCKED
+## Current Status: ⚠️ IN PROGRESS - Settings Configuration Issue
 
-The Android build is **blocked** by an incompatibility between Expo SDK 52 and Gradle 8.8+.
+**Date:** February 7, 2027  
+**Expo SDK:** 51.0.0 (downgraded from 52.0.49)  
+**React Native:** 0.74.5  
+**Gradle:** 8.3  
+**Java:** 17.0.21.9
 
-## What Was Fixed
-
-✅ **Gradle Version**: Upgraded from 8.10.2 → 8.8
-✅ **Java 17**: Installed and configured for Android Gradle Plugin 8.3+
-✅ **Expo Modules Core Bug**: Patched `node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle` line 95 to fix `components.release` error
-✅ **Toolchain Resolver**: Added Foojay toolchain resolver for automatic JDK download
-✅ **Custom Native Modules**: All Kotlin wrapper classes in `com.lightnative.app` package
-✅ **Expo Prebuild**: Full regeneration with valid PNG assets
-
-## Current Blocker
-
-### Issue: `expo-module-gradle-plugin` Not Found
-
-**Error:**
+## Latest Issue
 ```
-Plugin [id: 'expo-module-gradle-plugin'] was not found in any of the following sources:
-- Gradle Core Plugins (not a core plugin)
-- Included Builds (No included builds contain this plugin)
-- Plugin Repositories (plugin dependency must include a version number)
+Settings file 'settings.gradle' line: 9
+Could not find method react() for arguments on settings 'android'
 ```
 
-**Location:**
-- `node_modules/expo-background-fetch/android/build.gradle:3`
-- All Expo modules use this plugin
+## Journey So Far
 
-**Root Cause:**
-- Expo SDK 52's autolinking script (`expo-modules-autolinking`) calls `includeBuild()` for plugins **outside** of `pluginManagement` block
-- Gradle 8.8+ requires all plugins to be registered in the `pluginManagement` block in `settings.gradle`
-- This is a known bug in Expo SDK 52.0.47-52.0.49 ([GitHub Issue #38350](https://github.com/expo/expo/issues/38350))
+### Phase 1: Expo SDK 52 Incompatibility (SOLVED by Downgrade)
+- **Original Error**: `Plugin [id: 'expo-module-gradle-plugin'] was not found`
+- **Root Cause**: Expo SDK 52 + Gradle 8.8+ incompatibility ([Issue #38350](https://github.com/expo/expo/issues/38350))
+- **Solution**: Downgraded to Expo SDK 51.0.0
 
-## Attempted Solutions
+### Phase 2: Settings.gradle Syntax Mismatch (CURRENT)
+- **Error**: Cannot find correct settings.gradle syntax for RN 0.74.5
+- **Root Cause**: Project had RN 0.76 syntax in settings.gradle after SDK downgrade
+- **Status**: Testing various configurations
 
-1. ❌ **Gradle 8.3**: React Native 0.76 requires Gradle 8.8+ (uses `layout` API not available in 8.3)
-2. ❌ **Gradle 8.10.2**: Expo modules-core has `components.release` bug with Gradle 8.8+ (patched)
-3. ❌ **Manual Plugin Registration**: Expo's autolinking dynamically discovers modules - cannot manually list all in `pluginManagement`
+## What's Been Completed
 
-## Possible Solutions
+✅ **Java 17**: Installed at `C:\Program Files\Eclipse Adoptium\jdk-17.0.21.9-hotspot`  
+✅ **Gradle**: Set to 8.3 (compatible with SDK 51)  
+✅ **Expo SDK**: Downgraded to 51.0.0  
+✅ **Dependencies**: Updated with `npx expo install --fix -- --legacy-peer-deps`  
+✅ **Patches**: Created expo-modules-core patch for Gradle 8 compatibility  
+✅ **Git**: All changes committed and pushed to GitHub
 
-### Option 1: Wait for Expo Fix (Recommended)
-Wait for Expo SDK 52.1.x or 53.x that fixes the `pluginManagement` issue.
+## What We've Tried for settings.gradle
 
-**Tracking:**
-- [GitHub Issue #38350](https://github.com/expo/expo/issues/38350)
-- [Expo FYI - Gradle 8 Migration](https://github.com/expo/fyi/blob/main/expo-modules-gradle8-migration.md)
-
-### Option 2: Patch All Expo Modules
-Manually remove `id 'expo-module-gradle-plugin'` from every Expo module's `build.gradle` and apply the plugin functionality manually. This is **not sustainable** as it requires patching dozens of node_modules files.
-
-### Option 3: Downgrade React Native
-Downgrade to React Native 0.75 which uses Gradle 8.3. This loses RN 0.76 features.
-
-### Option 4: Use Expo's Rescue Scripts
-Use the community workaround: [expo-android-rescue](https://github.com/DavidAPears/expo-android-rescue)
-This dynamically patches Gradle during builds.
-
-## What's Working
-
-- iOS build: ✅ **Fully working**
-- Metro bundler: ✅ Working
-- TypeScript compilation: ✅ Working  
-- Expo prebuild: ✅ Generates valid Android structure
-- Java 17 + Gradle 8.8: ✅ Configured correctly
-- Custom native modules: ✅ All Kotlin files present
-
-## Environment
-
-- Expo SDK: 52.0.49
-- React Native: 0.76.9
-- Gradle: 8.8
-- Java: 17.0.21
-- AGP: 8.3.x (from React Native BOM)
-- Kotlin: 1.9.25
+1. ❌ `extensions.configure(com.facebook.react.ReactSettingsExtension)` - RN 0.76 syntax, doesn't work in 0.74
+2. ❌ `react { }` block - Method not found
+3. ⚠️ Attempted to fetch official Expo SDK 51 template (expo-gradle-plugin doesn't exist in SDK 51)
+4. ⚠️ Building @react-native/gradle-plugin from source (tests failed but plugin built)
 
 ## Next Steps
 
-**Recommended:** Monitor [Expo GitHub Issue #38350](https://github.com/expo/expo/issues/38350) for an official fix.
+1. **Option A**: Successfully unlock android directory and run `npx expo prebuild --clean`
+   - This will regenerate all Android files with correct SDK 51 configuration
+   - Currently blocked by file locks
 
-**Alternative:** If urgent, try the [expo-android-rescue](https://github.com/DavidAPears/expo-android-rescue) workaround.
+2. **Option B**: Find correct settings.gradle syntax for Expo SDK 51 + RN 0.74.5
+   - Check React Native 0.74.5 migration docs
+   - Look for working Expo SDK 51 project examples
+
+3. **Option C**: Use EAS Build (cloud build) to bypass local build issues
+   ```powershell
+   eas build --platform android --profile preview
+   ```
+
+## Build Commands (Once Fixed)
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.21.9-hotspot"
+& android\gradlew.bat -p android assembleRelease --no-daemon
+```
+
+APK Location: `android/app/build/outputs/apk/release/app-release.apk`
+
+## Installation on Samsung A06 5G
+
+```bash
+adb install android/app/build/outputs/apk/release/app-release.apk
+```
+
+## Files Modified
+
+- `package.json` - Downgraded to Expo SDK 51
+- `app.json` - SDK 51 configuration
+- `android/gradle/wrapper/gradle-wrapper.properties` - Gradle 8.3
+- `android/settings.gradle` - Multiple syntax attempts
+- `patches/expo-modules-core+2.2.3.patch` - Gradle 8 compatibility fix
+- `BUILD_STATUS.md` - This document
+
+## Git Commits
+
+- 3703fda: Downgrade to Expo SDK 51 for Android build compatibility
+- ec1b47c: Fix expo-modules-core component release error with patch
+- edafa9e: Update patches directory structure
+- cb69fc6: Add patch-package and fix expo-modules-core Gradle 8.8 compatibility
+
+## Environment Details
+
+- **OS**: Windows
+- **Node**: Latest
+- **Package Manager**: npm
+- **Build Tool**: Gradle 8.3
+- **Target Device**: Samsung A06 5G (Android)
+
+## Recommendation
+
+**Immediate**: Try to unlock the android directory (close VS Code, stop all Java/Gradle processes) and run `npx expo prebuild --clean` to regenerate with correct SDK 51 templates.
+
+**Alternative**: Use EAS Build if local build continues to have issues.
 
 ---
 
-**Last Updated:** $(Get-Date -Format "yyyy-MM-dd HH:mm")
-**Gradle Wrapper:** `android/gradle/wrapper/gradle-wrapper.properties`
-**Patched File:** `node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle` (line 95)
+*Last Updated: 2027-02-07*
