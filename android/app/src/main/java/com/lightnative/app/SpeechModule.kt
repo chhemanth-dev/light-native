@@ -70,7 +70,19 @@ class SpeechModule(
     }
 
     override fun onError(error: Int) {
-        sendError("Error code: $error")
+        val errorMsg = when(error) {
+            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error. Check if another app is using the microphone."
+            SpeechRecognizer.ERROR_CLIENT -> "Client side error. Try restarting the app."
+            13 -> "⚠️ MICROPHONE PERMISSION DENIED! Go to Settings → Apps → Light → Permissions → Microphone → Allow"
+            SpeechRecognizer.ERROR_NETWORK -> "Network error. Speech recognition needs internet connection."
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout. Check your internet connection."
+            SpeechRecognizer.ERROR_NO_MATCH -> "No speech detected. Try speaking louder and clearer."
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognizer is busy. Wait a moment and try again."
+            SpeechRecognizer.ERROR_SERVER -> "Google speech server error. Try again later."
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech heard. Mic timed out."
+            else -> "Speech recognition error code: $error. Use TYPE INSTEAD button below."
+        }
+        sendError(errorMsg)
         destroyRecognizer()
     }
 
