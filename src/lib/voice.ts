@@ -11,8 +11,13 @@ export type SpeakOptions = {
 };
 
 const JARVIS_VOICE_PREFERENCES = [
-  "en-gb-x-gbd-network",
-  "en-gb-x-gbc-network",
+  "en-gb-x-rjs-network",      // Male UK voice (Rishi - deep)
+  "en-gb-x-gbm-network",      // Male UK voice (George)
+  "en-us-x-iom-network",      // Male US voice (Iron Man style)
+  "en-us-x-tpd-network",      // Male US deep
+  "en-gb-x-gbd-network",      // Male UK Daniel (deeper)
+  "en-gb-x-gbc-network",      // Male UK Christopher
+  "en-gb-x-rjs-local",        // Male UK local
   "en-gb-x-gbd-local",
   "en_GB",
   "en-GB",
@@ -55,8 +60,8 @@ export async function speak(text: string, options: SpeakOptions = {}) {
     const wrappedOptions = {
       voice: _voice ?? undefined,
       language: "en-GB",
-      rate: 0.88,
-      pitch: 0.85,
+      rate: 0.85,      // Slightly slower for deeper sound
+      pitch: 0.75,     // LOWER pitch for male/JARVIS voice
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();

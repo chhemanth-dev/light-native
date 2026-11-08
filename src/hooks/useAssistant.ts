@@ -77,6 +77,7 @@ export function useAssistant() {
 
     listeningRef.current = true;
     setAssistantState("listening");
+    console.log("[useAssistant] startListening() called");
 
     if (!_speechEmitter) {
       _speechEmitter = new NativeEventEmitter(SpeechModule);
@@ -84,20 +85,25 @@ export function useAssistant() {
 
     let resultSub: ReturnType<NativeEventEmitter["addListener"]> | null = null;
     let errorSub:  ReturnType<NativeEventEmitter["addListener"]> | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
 
     const cleanup = () => {
+      console.log("[useAssistant] Cleaning up listeners");
       resultSub?.remove();
       errorSub?.remove();
+      if (timeoutId) clearTimeout(timeoutId);
       listeningRef.current = false;
     };
 
     resultSub = _speechEmitter.addListener(
       "onSpeechResult",
       async (data: { transcript: string }) => {
+        console.log("[useAssistant] onSpeechResult:", data.transcript);
         cleanup();
         if (data.transcript?.trim()) {
           await assistant.handleInput(data.transcript.trim());
         } else {
+          console.log("[useAssistant] Empty transcript, going idle");
           setAssistantState("idle");
         }
       }
@@ -105,15 +111,28 @@ export function useAssistant() {
 
     errorSub = _speechEmitter.addListener(
       "onSpeechError",
-      (_data: { error: string }) => {
+      (data: { error: string }) => {
+        console.error("[useAssistant] onSpeechError:", data.error);
         cleanup();
         setAssistantState("idle");
       }
     );
 
+    // Add 10-second timeout - if no result, assume speech recognition failed
+    timeoutId = setTimeout(() => {
+      console.warn("[useAssistant] Speech recognition timeout after 10s");
+      cleanup();
+      setAssistantState("idle");
+      // Show a message to user that speech wasn't detected
+      setLastResponse("I didn't hear anything, sir. Please try again and speak clearly.");
+    }, 10000);
+
     try {
+      console.log("[useAssistant] Calling SpeechModule.startListening");
       await SpeechModule.startListening("en-US");
-    } catch {
+      console.log("[useAssistant] SpeechModule.startListening called");
+    } catch (error) {
+      console.error("[useAssistant] SpeechModule.startListening error:", error);
       cleanup();
       setAssistantState("idle");
     }
