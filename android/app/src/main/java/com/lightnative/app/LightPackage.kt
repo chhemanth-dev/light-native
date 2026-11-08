@@ -11,6 +11,7 @@ class LightPackage : ReactPackage {
         GeminiNanoModule(reactContext),
         WakeWordModule(reactContext),
         SpeechModule(reactContext),
+        ReminderModule(reactContext),
     )
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()

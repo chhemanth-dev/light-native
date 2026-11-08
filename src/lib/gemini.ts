@@ -1,8 +1,10 @@
 /**
- * AI Engine — Gemini Nano (on-device) → Gemini API (cloud) → Offline fallback
- * Handles complex questions by using cloud AI when on-device isn't available.
+ * AI Engine — Gemini Nano (on-device) → Gemini API (cloud) → Web Search → Offline fallback
+ * Handles complex questions by using cloud AI and real-time web data.
  */
 import { NativeModules, Platform } from "react-native";
+import { smartSearch, getWeather } from "./websearch";
+import { parseReminderCommand, setReminder } from "./reminders";
 
 const GeminiNanoModule = Platform.OS === "android" ? NativeModules.GeminiNanoModule : null;
 
@@ -23,9 +25,11 @@ export type AIResponse = {
 const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant with the manner of a refined British butler — similar in character to J.A.R.V.I.S. from Iron Man.\n\n" +
 "Your capabilities:\n" +
 "- Read and summarize notifications from WhatsApp, Instagram, Gmail, etc.\n" +
-"- Set reminders and schedule tasks\n" +
+"- SET REMINDERS with exact times (user will say 'remind me to X at Y')\n" +
+"- SEARCH THE WEB for current facts, news, and information\n" +
+"- Get REAL-TIME WEATHER data\n" +
 "- Perform complex calculations and reasoning\n" +
-"- Answer questions on any topic using your knowledge\n" +
+"- Answer questions using both your knowledge AND live web data\n" +
 "- Draft emails and messages (you cannot send them, only suggest)\n" +
 "- Provide step-by-step guidance for complex tasks\n" +
 "- Tell jokes, provide weather insights, and casual conversation\n\n" +
@@ -33,17 +37,17 @@ const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant wit
 "- Speak in clear, brief British English. Never ramble.\n" +
 "- Address the user as \"sir\" or \"ma'am\" occasionally, but not every sentence.\n" +
 "- When reading messages: give a concise summary and offer to draft a reply.\n" +
-"- When setting reminders: respond with exact format \"REMINDER: [task] at [time]\" for parsing\n" +
-"- For complex questions (science, math, programming, trivia): provide detailed, accurate answers\n" +
+"- When user asks about current facts (who/what/when/where): the system will fetch live data from the web\n" +
+"- For reminders: system automatically handles setting Android alarms\n" +
 "- For calculations: show the work and result clearly\n" +
 "- Never reveal contents of private messages unprompted. Wait to be asked.\n" +
-"- Handle reminders and message summaries from context given to you.\n" +
 "- You are private. Never share or reference other users' data.\n" +
 "- Be helpful, accurate, and productive. You're here to make the user's life easier.\n\n" +
 "Examples:\n" +
 "- \"What is 25 * 137?\" → \"The result is 3,425, sir.\"\n" +
-"- \"Remind me to call John at 3pm\" → \"REMINDER: call John at 15:00\"\n" +
-"- \"Explain quantum entanglement\" → [detailed explanation]\n" +
+"- \"Remind me to call John at 3pm\" → System sets alarm automatically\n" +
+"- \"Who is Elon Musk?\" → Fetches current info from web\n" +
+"- \"What's the weather?\" → Gets real-time weather data\n" +
 "- \"Read my messages\" → [summary of unread notifications]";
 
 export async function isGeminiNanoAvailable(): Promise<boolean> {
@@ -58,13 +62,79 @@ export async function isGeminiNanoAvailable(): Promise<boolean> {
 
 /**
  * Ask AI with conversation history.
- * Tries: 1) Gemini Nano, 2) Gemini API (cloud), 3) Offline fallback
+ * Tries: 1) Check for reminders, 2) Web search for facts, 3) Gemini Nano, 4) Gemini API (cloud), 5) Offline fallback
  */
 export async function ask(
   messages: AIMessage[],
   context?: string
 ): Promise<AIResponse> {
-  // Try 1: Gemini Nano (on-device)
+  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content.toLowerCase() || "";
+  
+  // Step 1: Check if this is a reminder request
+  const reminderMatch = parseReminderCommand(lastUserMessage);
+  if (reminderMatch) {
+    try {
+      await setReminder(reminderMatch);
+      const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+      const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
+      const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
+      return {
+        text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
+        offline: false
+      };
+    } catch (e) {
+      console.error('[AI] Reminder failed:', e);
+      return {
+        text: "I apologize, sir. I encountered an issue setting that reminder. Please ensure the app has alarm permissions.",
+        offline: true
+      };
+    }
+  }
+  
+  // Step 2: Check if this is a weather query
+  if (lastUserMessage.includes('weather')) {
+    try {
+      const weatherData = await getWeather();
+      if (weatherData) {
+        return { text: "The current weather is: " + weatherData, offline: false };
+      }
+    } catch (e) {
+      console.warn('[AI] Weather fetch failed:', e);
+    }
+  }
+  
+  // Step 3: Check if this is a factual question that needs web search
+  const needsWebSearch = 
+    lastUserMessage.includes('who is') ||
+    lastUserMessage.includes('who was') ||
+    lastUserMessage.includes('what is') ||
+    lastUserMessage.includes('when did') ||
+    lastUserMessage.includes('where is') ||
+    lastUserMessage.includes('how many') ||
+    lastUserMessage.includes('explain') ||
+    lastUserMessage.includes('tell me about');
+  
+  if (needsWebSearch) {
+    try {
+      console.log('[AI] Attempting web search for factual query');
+      const webResult = await smartSearch(lastUserMessage);
+      if (webResult && webResult.length > 20 && !webResult.includes('could not find')) {
+        return { text: webResult, offline: false };
+      }
+    } catch (e) {
+      console.warn('[AI] Web search failed:', e);
+    }
+  }
+  
+  // Step 4: Try Gemini Nano (on-device)
   const nanoAvailable = await isGeminiNanoAvailable();
   if (nanoAvailable) {
     try {
@@ -76,7 +146,7 @@ export async function ask(
     }
   }
 
-  // Try 2: Gemini API (cloud)
+  // Step 5: Try Gemini API (cloud)
   try {
     const text = await callGeminiAPI(messages, context);
     return { text, offline: false };
@@ -84,7 +154,7 @@ export async function ask(
     console.warn("Gemini API failed:", e);
   }
 
-  // Try 3: Offline fallback
+  // Step 6: Offline fallback
   return { text: offlineFallback(messages, context), offline: true };
 }
 

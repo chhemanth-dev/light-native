@@ -62,5 +62,11 @@
     <service
       android:name=".NotificationEventService"
       android:exported="false"/>
+    
+    <!-- Reminder Broadcast Receiver -->
+    <receiver
+      android:name=".ReminderReceiver"
+      android:enabled="true"
+      android:exported="false"/>
   </application>
 </manifest>

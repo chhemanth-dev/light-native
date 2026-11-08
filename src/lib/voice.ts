@@ -78,13 +78,12 @@ export async function speak(text: string, options: SpeakOptions = {}) {
     console.log("[Voice] Selected voice identifier:", selectedVoice);
     await Speech.stop();
     
-    // ULTRA-DEEP MALE VOICE SETTINGS
-    // Going as low as possible to sound like a man
+    // DEEP MALE VOICE SETTINGS - Balanced for natural sound
     const wrappedOptions = {
       voice: selectedVoice ?? undefined,
       language: "en-GB",
-      rate: 0.60,      // Slower for deeper, more authoritative tone
-      pitch: 0.25,     // ABSOLUTE MINIMUM - deepest possible male voice
+      rate: 0.70,      // Natural speaking pace
+      pitch: 0.75,     // Deep male voice, still natural sounding
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();
