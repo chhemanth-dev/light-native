@@ -29,6 +29,38 @@ class MainApplication : Application(), ReactApplication {
         // Expo modules not found, continue without them
       }
       
+      // Add gesture handler (required for navigation)
+      try {
+        val gestureHandlerPackage = Class.forName("com.swmansion.gesturehandler.RNGestureHandlerPackage")
+        packages.add(gestureHandlerPackage.getDeclaredConstructor().newInstance() as ReactPackage)
+      } catch (e: Exception) {
+        // Gesture handler not found
+      }
+      
+      // Add reanimated (required for animations)
+      try {
+        val reanimatedPackage = Class.forName("com.swmansion.reanimated.ReanimatedPackage")
+        packages.add(reanimatedPackage.getDeclaredConstructor().newInstance() as ReactPackage)
+      } catch (e: Exception) {
+        // Reanimated not found
+      }
+      
+      // Add screens (required for navigation)
+      try {
+        val screensPackage = Class.forName("com.swmansion.rnscreens.RNScreensPackage")
+        packages.add(screensPackage.getDeclaredConstructor().newInstance() as ReactPackage)
+      } catch (e: Exception) {
+        // Screens not found
+      }
+      
+      // Add safe area context
+      try {
+        val safeAreaPackage = Class.forName("com.th3rdwave.safeareacontext.SafeAreaContextPackage")
+        packages.add(safeAreaPackage.getDeclaredConstructor().newInstance() as ReactPackage)
+      } catch (e: Exception) {
+        // Safe area context not found
+      }
+      
       // Add our custom native modules
       packages.add(LightPackage())
       
