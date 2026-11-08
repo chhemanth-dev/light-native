@@ -152,6 +152,23 @@ export default function HomeScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+  // TEST FUNCTION - bypasses speech recognition
+  async function testDirectInput() {
+    try {
+      console.log("[HomeScreen] TEST: Direct input test starting");
+      await beginSession();
+      console.log("[HomeScreen] TEST: Session started");
+      
+      // Simulate the assistant receiving "what time is it"
+      const { handleInput } = await import("../../src/lib/assistant");
+      console.log("[HomeScreen] TEST: Calling handleInput with test phrase");
+      await (await import("../../src/lib/assistant")).assistant.handleInput("what time is it");
+      console.log("[HomeScreen] TEST: handleInput called");
+    } catch (e) {
+      console.error("[HomeScreen] TEST: Error:", e);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       {/* Header */}
@@ -215,6 +232,14 @@ export default function HomeScreen() {
           : "tap to retry"}
         </Text>
       </View>
+
+      {/* TEST BUTTON - Remove after testing */}
+      <Pressable 
+        style={[styles.endBtn, { backgroundColor: "#0A1F0A", borderColor: "#22C55E", marginBottom: 8 }]} 
+        onPress={testDirectInput}
+      >
+        <Text style={[styles.endBtnText, { color: "#86EFAC" }]}>🧪 TEST: What time is it?</Text>
+      </Pressable>
 
       {/* End session */}
       {assistantState !== "idle" && (
