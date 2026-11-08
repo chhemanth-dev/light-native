@@ -7,7 +7,7 @@
  */
 import { NativeModules, Platform } from "react-native";
 
-const { GeminiNanoModule } = NativeModules;
+const GeminiNanoModule = Platform.OS === "android" ? NativeModules.GeminiNanoModule : null;
 
 export type AIMessage = {
   role: "user" | "assistant" | "system";

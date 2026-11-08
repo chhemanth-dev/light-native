@@ -9,7 +9,7 @@ import { assistant } from "../lib/assistant";
 import { startSession, endSession } from "../lib/db";
 import * as Haptics from "expo-haptics";
 
-const { SpeechModule } = NativeModules;
+const SpeechModule = Platform.OS === "android" ? NativeModules.SpeechModule : null;
 let _speechEmitter: NativeEventEmitter | null = null;
 
 export function useAssistant() {

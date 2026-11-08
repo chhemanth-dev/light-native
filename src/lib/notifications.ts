@@ -9,7 +9,7 @@
 import { NativeModules, NativeEventEmitter, Platform } from "react-native";
 import { saveMessage } from "./db";
 
-const { NotificationListenerModule } = NativeModules;
+const NotificationListenerModule = Platform.OS === "android" ? NativeModules.NotificationListenerModule : null;
 
 export type RawNotification = {
   id: string;

@@ -8,7 +8,7 @@
  */
 import { NativeModules, NativeEventEmitter, Platform, AppState } from "react-native";
 
-const { WakeWordModule } = NativeModules;
+const WakeWordModule = Platform.OS === "android" ? NativeModules.WakeWordModule : null;
 
 const WAKE_PHRASES = [
   "hey light",
