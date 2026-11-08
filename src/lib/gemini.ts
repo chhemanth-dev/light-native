@@ -111,7 +111,8 @@ async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<s
   
   console.log('[Gemini API] Calling:', GEMINI_API_URL);
   
-  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+  const apiUrl = GEMINI_API_URL + '?key=' + GEMINI_API_KEY;
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
