@@ -18,7 +18,7 @@ const sizes = {
 async function generateIcons() {
   console.log('📱 Generating app icons...');
   
-  const svgPath = './assets/icon-new.svg';
+  const svgPath = './assets/icon-light-rays.svg';
   
   if (!fs.existsSync(svgPath)) {
     console.error('❌ SVG file not found:', svgPath);

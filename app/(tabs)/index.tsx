@@ -120,16 +120,31 @@ export default function HomeScreen() {
 
   async function handleOrbPress() {
     try {
+      console.log("[HomeScreen] Orb pressed! State:", assistantState);
+      
       if (assistantState !== "idle") {
+        console.log("[HomeScreen] Ending current session");
         endCurrentSession();
         return;
       }
+      
+      console.log("[HomeScreen] Checking mic permission, micGranted:", micGranted);
       const hasMic = micGranted || (await askMicPermission());
-      if (!hasMic) return;
+      console.log("[HomeScreen] Mic permission result:", hasMic);
+      
+      if (!hasMic) {
+        console.log("[HomeScreen] Mic denied, returning");
+        return;
+      }
+      
       setMicGranted(true);
+      console.log("[HomeScreen] Beginning session...");
       await beginSession();
+      console.log("[HomeScreen] Starting listening...");
       await startListening();
-    } catch {
+      console.log("[HomeScreen] Listening started");
+    } catch (e) {
+      console.error("[HomeScreen] Error in handleOrbPress:", e);
       // Silently ignore — user can tap again
     }
   }
