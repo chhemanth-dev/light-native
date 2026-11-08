@@ -83,8 +83,8 @@ export async function speak(text: string, options: SpeakOptions = {}) {
     const wrappedOptions = {
       voice: selectedVoice ?? undefined,
       language: "en-GB",
-      rate: 0.65,      // Even slower - deeper, more authoritative
-      pitch: 0.35,     // EXTREMELY LOW (will clamp to 0.5 minimum but let's try)
+      rate: 0.60,      // Slower for deeper, more authoritative tone
+      pitch: 0.25,     // ABSOLUTE MINIMUM - deepest possible male voice
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();

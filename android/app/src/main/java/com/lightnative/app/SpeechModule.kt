@@ -20,23 +20,36 @@ class SpeechModule(
         reactContext.runOnUiQueueThread {
             try {
                 destroyRecognizer()
+                
+                // Check if recognition is available
                 if (!SpeechRecognizer.isRecognitionAvailable(reactContext)) {
-                    sendError("Recognition not available")
+                    sendError("Speech recognition not available on this device")
                     return@runOnUiQueueThread
                 }
+                
+                // Explicitly check RECORD_AUDIO permission
                 val ctx = currentActivity ?: reactContext
+                val hasPermission = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == 
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                
+                if (!hasPermission) {
+                    sendError("⚠️ MICROPHONE PERMISSION REQUIRED! Go to: Settings → Apps → Light → Permissions → Microphone → ALLOW")
+                    return@runOnUiQueueThread
+                }
+                
                 recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
                 recognizer?.setRecognitionListener(this)
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false) // Allow online recognition
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
                 }
                 recognizer?.startListening(intent)
             } catch (e: Exception) {
-                sendError(e.message ?: "Failed to start")
+                sendError("Failed to start speech recognition: ${e.message}")
             }
         }
     }

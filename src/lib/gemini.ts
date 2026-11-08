@@ -22,16 +22,32 @@ export type AIResponse = {
 
 const SYSTEM_PROMPT = `You are Light, a calm, composed personal AI assistant with the manner of a refined British butler — similar in character to J.A.R.V.I.S. from Iron Man.
 
+Your capabilities:
+- Read and summarize notifications from WhatsApp, Instagram, Gmail, etc.
+- Set reminders and schedule tasks
+- Perform complex calculations and reasoning
+- Answer questions on any topic using your knowledge
+- Draft emails and messages (you cannot send them, only suggest)
+- Provide step-by-step guidance for complex tasks
+- Tell jokes, provide weather insights, and casual conversation
+
 Your rules:
 - Speak in clear, brief British English. Never ramble.
 - Address the user as "sir" or "ma'am" occasionally, but not every sentence.
 - When reading messages: give a concise summary and offer to draft a reply.
-- When setting reminders: confirm the time and subject clearly.
+- When setting reminders: respond with exact format "REMINDER: [task] at [time]" for parsing
+- For complex questions (science, math, programming, trivia): provide detailed, accurate answers
+- For calculations: show the work and result clearly
 - Never reveal contents of private messages unprompted. Wait to be asked.
 - Handle reminders and message summaries from context given to you.
-- Forget conversations between sessions unless the user asks to recall them.
 - You are private. Never share or reference other users' data.
-- Answer all questions accurately and helpfully, including complex queries.`;
+- Be helpful, accurate, and productive. You're here to make the user's life easier.
+
+Examples:
+- "What is 25 * 137?" → "The result is 3,425, sir."
+- "Remind me to call John at 3pm" → "REMINDER: call John at 15:00"
+- "Explain quantum entanglement" → [detailed explanation]
+- "Read my messages" → [summary of unread notifications];
 
 export async function isGeminiNanoAvailable(): Promise<boolean> {
   if (Platform.OS !== "android") return false;
@@ -89,7 +105,7 @@ async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<s
     }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 500,
+      maxOutputTokens: 2048, // Increased for complex tasks and detailed responses
     }
   };
   
@@ -151,6 +167,30 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
     .find((m) => m.role === "user")
     ?.content.toLowerCase() ?? "";
 
+  // Math/calculations
+  if (lastUser.includes("+") || lastUser.includes("-") || lastUser.includes("*") || 
+      lastUser.includes("/") || lastUser.includes("calculate") || lastUser.includes("what is")) {
+    // Try to extract and calculate simple math
+    try {
+      const match = lastUser.match(/(\d+\.?\d*)\s*([+\-*/])\s*(\d+\.?\d*)/);
+      if (match) {
+        const [_, a, op, b] = match;
+        const num1 = parseFloat(a);
+        const num2 = parseFloat(b);
+        let result = 0;
+        switch(op) {
+          case '+': result = num1 + num2; break;
+          case '-': result = num1 - num2; break;
+          case '*': result = num1 * num2; break;
+          case '/': result = num1 / num2; break;
+        }
+        return `The result is ${result}, sir.`;
+      }
+    } catch (e) {
+      // Fall through to default message
+    }
+  }
+
   // Reminder intent
   if (
     lastUser.includes("remind") ||
@@ -166,7 +206,8 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
     lastUser.includes("notification") ||
     lastUser.includes("email") ||
     lastUser.includes("whatsapp") ||
-    lastUser.includes("gmail")
+    lastUser.includes("gmail") ||
+    lastUser.includes("instagram")
   ) {
     if (context) {
       return `Here is what I have, sir: ${context}`;
@@ -199,6 +240,11 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
     return `Today is ${today}, sir.`;
   }
 
+  // Weather (basic response)
+  if (lastUser.includes("weather")) {
+    return "I apologize, sir. Weather data requires an internet connection. Please ensure you're connected and try again.";
+  }
+
   // Greetings
   if (
     lastUser.includes("hello") ||
@@ -209,6 +255,19 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
     return "Hello, sir. How may I assist you?";
   }
 
+  // Complex queries
+  if (
+    lastUser.includes("explain") ||
+    lastUser.includes("how does") ||
+    lastUser.includes("what does") ||
+    lastUser.includes("tell me about") ||
+    lastUser.includes("why") ||
+    lastUser.includes("who is") ||
+    lastUser.includes("when did")
+  ) {
+    return "That's an excellent question, sir. However, I need an internet connection to provide a detailed answer. Please ensure you're connected and try again.";
+  }
+
   // Default - AI unavailable message
-  return "I apologize, sir. I'm currently operating in offline mode with limited capabilities. I can help you with reminders, reading cached messages, or telling the time. For complex queries, please ensure you have an active internet connection.";
+  return "I apologize, sir. I'm currently operating in offline mode with limited capabilities. I can help you with basic calculations, reminders, reading cached messages, or telling the time. For complex queries, please ensure you have an active internet connection.";
 }
