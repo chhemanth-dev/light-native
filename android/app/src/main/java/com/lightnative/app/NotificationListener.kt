@@ -9,6 +9,7 @@ import android.util.Log
 import com.facebook.react.HeadlessJsTaskService
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.jstasks.HeadlessJsTaskConfig
 
 class NotificationListener : NotificationListenerService() {
 
