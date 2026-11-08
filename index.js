@@ -5,9 +5,10 @@ import "expo-router/entry";
 
 // Register headless task for background notification processing
 AppRegistry.registerHeadlessTask('NotificationEvent', () => async (data) => {
+  console.log('[HeadlessTask] ========== NOTIFICATION RECEIVED ==========');
+  console.log('[HeadlessTask] Data:', JSON.stringify(data, null, 2));
+  
   try {
-    console.log('[HeadlessTask] NotificationEvent received:', data);
-    
     // Map package names to app names
     const appNameMap = {
       'com.whatsapp': 'WhatsApp',
@@ -22,9 +23,9 @@ AppRegistry.registerHeadlessTask('NotificationEvent', () => async (data) => {
     };
     
     const appName = appNameMap[data.package] || data.package;
+    console.log('[HeadlessTask] App name:', appName);
     
-    // Save to database
-    await saveMessage({
+    const message = {
       source: data.package,
       app_name: appName,
       sender: data.title || 'Unknown',
@@ -32,10 +33,16 @@ AppRegistry.registerHeadlessTask('NotificationEvent', () => async (data) => {
       timestamp: data.timestamp || Date.now(),
       read: 0,
       session_id: null,
-    });
+    };
     
-    console.log('[HeadlessTask] Message saved to DB');
+    console.log('[HeadlessTask] Saving message:', JSON.stringify(message, null, 2));
+    
+    // Save to database
+    await saveMessage(message);
+    
+    console.log('[HeadlessTask] ✅ Message saved successfully to DB');
   } catch (error) {
-    console.error('[HeadlessTask] Error saving notification:', error);
+    console.error('[HeadlessTask] ❌ Error saving notification:', error);
+    console.error('[HeadlessTask] Error stack:', error.stack);
   }
 });

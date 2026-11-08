@@ -79,35 +79,49 @@ export async function ask(
  * Call Google Gemini API (cloud-based AI)
  */
 async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<string> {
+  console.log('[Gemini API] Starting API call...');
   const fullPrompt = buildPrompt(messages, context);
+  console.log('[Gemini API] Prompt:', fullPrompt.substring(0, 100) + '...');
+  
+  const requestBody = {
+    contents: [{
+      parts: [{ text: fullPrompt }]
+    }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 500,
+    }
+  };
+  
+  console.log('[Gemini API] Calling:', GEMINI_API_URL);
   
   const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: fullPrompt }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 500,
-      }
-    }),
+    body: JSON.stringify(requestBody),
   });
 
+  console.log('[Gemini API] Response status:', response.status);
+  
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const errorText = await response.text();
+    console.error('[Gemini API] Error response:', errorText);
+    throw new Error(`API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
+  console.log('[Gemini API] Response data:', JSON.stringify(data).substring(0, 200));
+  
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   
   if (!text) {
+    console.error('[Gemini API] No text in response:', JSON.stringify(data));
     throw new Error('No response from API');
   }
 
+  console.log('[Gemini API] Success! Text:', text.substring(0, 100));
   return text.trim();
 }
 

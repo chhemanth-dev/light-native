@@ -57,7 +57,9 @@ export class LightAssistant {
   async handleInput(userText: string) {
     if (!userText.trim()) return;
 
-    console.log("[Assistant] handleInput:", userText);
+    console.log("=========================================");
+    console.log("[Assistant] NEW INPUT:", userText);
+    console.log("=========================================");
     this.setState("thinking");
     this.emit({ type: "transcript", text: userText });
 
@@ -74,18 +76,26 @@ export class LightAssistant {
       console.log("[Assistant] Checking local intent...");
       const localResponse = await this.handleLocalIntent(userText);
       if (localResponse) {
-        console.log("[Assistant] Local response:", localResponse.substring(0, 50));
+        console.log("[Assistant] ✅ Using LOCAL response:", localResponse.substring(0, 80));
         await this.respond(localResponse, true);
         return;
       }
 
       console.log("[Assistant] Building context...");
       const context = await this.buildContext(userText);
+      console.log("[Assistant] Context length:", context.length);
+      if (context) {
+        console.log("[Assistant] Context preview:", context.substring(0, 100));
+      }
+      
       this.history.push({ role: "user", content: userText });
 
-      console.log("[Assistant] Asking AI...");
+      console.log("[Assistant] ⏳ Calling AI with", this.history.length, "messages in history...");
       const { text, offline } = await ask(this.history, context);
-      console.log("[Assistant] AI response (offline=" + offline + "):", text.substring(0, 50));
+      console.log("[Assistant] ✅ AI response received!");
+      console.log("[Assistant] Offline mode:", offline);
+      console.log("[Assistant] Response:", text.substring(0, 100));
+      
       this.history.push({ role: "assistant", content: text });
 
       if (this.history.length > 20) {
@@ -95,11 +105,10 @@ export class LightAssistant {
       await this.respond(text, offline);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
-      console.error("[Assistant] Error:", msg, e);
+      console.error("[Assistant] ❌ ERROR:", msg);
+      console.error("[Assistant] Error details:", e);
       this.setState("error");
       this.emit({ type: "error", message: msg });
-      // Don't try to speak the error message — just go idle
-      // (speaking might be what caused the error)
       setTimeout(() => this.setState("idle"), 2000);
     }
   }
@@ -144,23 +153,33 @@ export class LightAssistant {
 
   private async handleLocalIntent(text: string): Promise<string | null> {
     const lower = text.toLowerCase().trim();
+    console.log("[Assistant] handleLocalIntent checking:", lower);
 
     // READ MESSAGES
     if (
       lower.match(/\b(messages?|notifications?|updates?|whatsapp|gmail|instagram|emails?)\b/) &&
       lower.match(/\b(read|show|tell|what|any|check|have i|do i)\b/)
     ) {
+      console.log("[Assistant] 📬 Message intent detected!");
       try {
+        console.log("[Assistant] Fetching unread messages from DB...");
         const unread = await getUnreadMessages();
+        console.log("[Assistant] Found", unread.length, "unread messages");
+        if (unread.length > 0) {
+          console.log("[Assistant] First message:", JSON.stringify(unread[0]));
+        }
         await markAllRead();
-        return formatMessagesForSpeech(
+        const response = formatMessagesForSpeech(
           unread.map((m) => ({
             app_name: m.app_name,
             sender: m.sender,
             content: m.content,
           }))
         );
-      } catch {
+        console.log("[Assistant] Formatted response:", response.substring(0, 100));
+        return response;
+      } catch (error) {
+        console.error("[Assistant] ❌ Error retrieving messages:", error);
         return "I couldn't retrieve your messages, sir.";
       }
     }
