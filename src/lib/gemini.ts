@@ -1,13 +1,14 @@
 /**
- * Gemini Nano — on-device AI via Android's AICore (Android 14+).
- * Falls back to a rule-based offline engine when Gemini Nano is unavailable.
- *
- * The NativeModule bridge (GeminiNanoModule) is defined in
- * modules/gemini-nano/android/.../GeminiNanoModule.kt
+ * AI Engine — Gemini Nano (on-device) → Gemini API (cloud) → Offline fallback
+ * Handles complex questions by using cloud AI when on-device isn't available.
  */
 import { NativeModules, Platform } from "react-native";
 
 const GeminiNanoModule = Platform.OS === "android" ? NativeModules.GeminiNanoModule : null;
+
+// Google Gemini API - Free tier
+const GEMINI_API_KEY = "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 export type AIMessage = {
   role: "user" | "assistant" | "system";
@@ -16,7 +17,7 @@ export type AIMessage = {
 
 export type AIResponse = {
   text: string;
-  offline: boolean; // true = came from rule-based fallback
+  offline: boolean;
 };
 
 const SYSTEM_PROMPT = `You are Light, a calm, composed personal AI assistant with the manner of a refined British butler — similar in character to J.A.R.V.I.S. from Iron Man.
@@ -27,14 +28,11 @@ Your rules:
 - When reading messages: give a concise summary and offer to draft a reply.
 - When setting reminders: confirm the time and subject clearly.
 - Never reveal contents of private messages unprompted. Wait to be asked.
-- If offline, handle reminders and message summaries from context given to you.
+- Handle reminders and message summaries from context given to you.
 - Forget conversations between sessions unless the user asks to recall them.
-- You must search online if needed to provide the best results to the user.
-- You are private. Never share or reference other users' data.`;
+- You are private. Never share or reference other users' data.
+- Answer all questions accurately and helpfully, including complex queries.`;
 
-/**
- * Check if Gemini Nano is available on this device.
- */
 export async function isGeminiNanoAvailable(): Promise<boolean> {
   if (Platform.OS !== "android") return false;
   if (!GeminiNanoModule?.isAvailable) return false;
@@ -46,28 +44,71 @@ export async function isGeminiNanoAvailable(): Promise<boolean> {
 }
 
 /**
- * Ask Gemini Nano with conversation history.
- * Falls back to rule-based engine when unavailable.
+ * Ask AI with conversation history.
+ * Tries: 1) Gemini Nano, 2) Gemini API (cloud), 3) Offline fallback
  */
 export async function ask(
   messages: AIMessage[],
   context?: string
 ): Promise<AIResponse> {
-  const available = await isGeminiNanoAvailable();
-
-  if (available) {
+  // Try 1: Gemini Nano (on-device)
+  const nanoAvailable = await isGeminiNanoAvailable();
+  if (nanoAvailable) {
     try {
-      // Build the full prompt for Gemini Nano
       const fullPrompt = buildPrompt(messages, context);
       const text: string = await GeminiNanoModule.generateText(fullPrompt);
       return { text: text.trim(), offline: false };
     } catch (e) {
-      console.warn("Gemini Nano failed, using offline fallback:", e);
+      console.warn("Gemini Nano failed:", e);
     }
   }
 
-  // Offline rule-based fallback
+  // Try 2: Gemini API (cloud)
+  try {
+    const text = await callGeminiAPI(messages, context);
+    return { text, offline: false };
+  } catch (e) {
+    console.warn("Gemini API failed:", e);
+  }
+
+  // Try 3: Offline fallback
   return { text: offlineFallback(messages, context), offline: true };
+}
+
+/**
+ * Call Google Gemini API (cloud-based AI)
+ */
+async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<string> {
+  const fullPrompt = buildPrompt(messages, context);
+  
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: fullPrompt }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      }
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  
+  if (!text) {
+    throw new Error('No response from API');
+  }
+
+  return text.trim();
 }
 
 function buildPrompt(messages: AIMessage[], context?: string): string {
@@ -88,9 +129,7 @@ function buildPrompt(messages: AIMessage[], context?: string): string {
 }
 
 /**
- * Rule-based offline fallback — handles the most common commands
- * without any AI model. Good enough for reminders, message counts,
- * and basic replies when there's no internet and no Gemini Nano.
+ * Offline fallback for basic commands when no AI is available
  */
 function offlineFallback(messages: AIMessage[], context?: string): string {
   const lastUser = [...messages]
@@ -149,20 +188,13 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
   // Greetings
   if (
     lastUser.includes("hello") ||
-    lastUser.includes("hey") ||
-    lastUser.includes("hi light")
+    lastUser.includes("hi ") ||
+    lastUser === "hi" ||
+    lastUser.includes("hey")
   ) {
-    const hour = new Date().getHours();
-    const greeting =
-      hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-    return `${greeting}, sir. How may I assist you today?`;
+    return "Hello, sir. How may I assist you?";
   }
 
-  // Forget / clear
-  if (lastUser.includes("forget") || lastUser.includes("clear history")) {
-    return "Understood. I'll clear our conversation history, sir.";
-  }
-
-  // Default
-  return "I'm afraid I need an internet connection to process that request fully. Is there anything I can assist you with offline, such as reminders or reading your cached messages?";
+  // Default - AI unavailable message
+  return "I apologize, sir. I'm currently operating in offline mode with limited capabilities. I can help you with reminders, reading cached messages, or telling the time. For complex queries, please ensure you have an active internet connection.";
 }
