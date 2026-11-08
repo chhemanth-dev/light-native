@@ -55,6 +55,8 @@ jobs:
         cd android
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon --stacktrace
+      env:
+        GRADLE_OPTS: "-Xmx6g -Xms512m -XX:MaxMetaspaceSize=1g"
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
