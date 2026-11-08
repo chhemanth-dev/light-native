@@ -2,13 +2,12 @@ package com.lightnative.app
 
 import android.app.Application
 import android.content.res.Configuration
-import androidx.annotation.NonNull
 
-import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.ReactHost
+import com.facebook.react.shell.MainReactPackage
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
@@ -16,9 +15,12 @@ import com.facebook.soloader.SoLoader
 class MainApplication : Application(), ReactApplication {
   override val reactNativeHost: ReactNativeHost = object : DefaultReactNativeHost(this) {
     override fun getPackages(): List<ReactPackage> {
-      val packages = PackageList(this).packages.toMutableList()
-      packages.add(LightPackage())
-      return packages
+      // Note: Expo modules are automatically loaded via autolinking
+      // We only need to add our custom package here
+      return listOf(
+        MainReactPackage(),
+        LightPackage()
+      )
     }
 
     override fun getJSMainModuleName(): String = "index"
