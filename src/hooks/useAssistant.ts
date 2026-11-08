@@ -28,6 +28,7 @@ export function useAssistant() {
 
   const listeningRef    = useRef(false);
   const sessionActiveRef = useRef(false);
+  const lastListenAttemptRef = useRef<number>(0);
 
   // Wire assistant events → store
   useEffect(() => {
@@ -70,9 +71,21 @@ export function useAssistant() {
   /**
    * Start listening for a single voice command.
    * Returns a promise that resolves once listening has started (or failed).
+   * Includes debounce to prevent rapid-fire starts.
    */
   const startListening = useCallback(async () => {
-    if (listeningRef.current) return;
+    // Debounce: don't start if we just started in the last 2 seconds
+    const now = Date.now();
+    if (now - lastListenAttemptRef.current < 2000) {
+      console.log("[useAssistant] Debounce: ignoring rapid startListening call");
+      return;
+    }
+    lastListenAttemptRef.current = now;
+    
+    if (listeningRef.current) {
+      console.log("[useAssistant] Already listening, ignoring");
+      return;
+    }
     if (Platform.OS !== "android" || !SpeechModule) return;
 
     listeningRef.current = true;
@@ -113,6 +126,7 @@ export function useAssistant() {
         console.error("[useAssistant] onSpeechError:", data.error);
         cleanup();
         setAssistantState("idle");
+        // Don't automatically retry - let user press orb again
       }
     );
 

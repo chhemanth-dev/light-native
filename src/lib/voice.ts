@@ -78,12 +78,13 @@ export async function speak(text: string, options: SpeakOptions = {}) {
     console.log("[Voice] Selected voice identifier:", _voice);
     await Speech.stop();
     
-    // Add error handlers
+    // FORCE male voice characteristics even if we can't select a male voice
+    // Ultra-low pitch + slow rate creates deeper sound
     const wrappedOptions = {
       voice: _voice ?? undefined,
       language: "en-GB",
-      rate: 0.80,      // Slower for deeper, more dramatic sound
-      pitch: 0.65,     // MUCH LOWER pitch for deep male JARVIS voice
+      rate: 0.75,      // Much slower - creates deeper, more commanding sound
+      pitch: 0.50,     // MINIMUM pitch (0.5 is lowest) for DEEP MALE VOICE
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();

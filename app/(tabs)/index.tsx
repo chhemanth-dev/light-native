@@ -92,11 +92,12 @@ export default function HomeScreen() {
   // Notification listener
   useNotificationListener();
 
-  // Wake word (only when mic is granted)
-  useWakeWord(async () => {
-    await beginSession();
-    await startListening();
-  }, micGranted);
+  // Wake word DISABLED temporarily to fix mic cycling issue
+  // Will re-enable after testing
+  // useWakeWord(async () => {
+  //   await beginSession();
+  //   await startListening();
+  // }, micGranted);
 
   // Auto-scroll on new content
   useEffect(() => {
