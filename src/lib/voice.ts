@@ -32,6 +32,9 @@ export async function initVoice() {
   _voiceInitAttempted = true;
   try {
     const available = await Speech.getAvailableVoicesAsync();
+    console.log("[Voice] Available voices:", available.map(v => `${v.identifier} (${v.name}, ${v.language})`).join(", "));
+    
+    // First try: exact preference matches
     for (const pref of JARVIS_VOICE_PREFERENCES) {
       const match = available.find(
         (v) =>
@@ -40,10 +43,29 @@ export async function initVoice() {
       );
       if (match) {
         _voice = match.identifier;
+        console.log("[Voice] Matched preference:", pref, "→", _voice);
         break;
       }
     }
-  } catch {
+    
+    // Second try: any male voice (name contains "male" or known male names)
+    if (!_voice) {
+      const maleNames = ["male", "man", "daniel", "george", "james", "rishi", "iron"];
+      const maleVoice = available.find(v => 
+        maleNames.some(name => 
+          v.name?.toLowerCase().includes(name) || 
+          v.identifier?.toLowerCase().includes(name)
+        )
+      );
+      if (maleVoice) {
+        _voice = maleVoice.identifier;
+        console.log("[Voice] Found male voice by name:", _voice);
+      }
+    }
+    
+    console.log("[Voice] Final selected voice:", _voice || "system default");
+  } catch (e) {
+    console.error("[Voice] initVoice error:", e);
     // ignore — will use system default
   }
   return _voice;
@@ -53,15 +75,15 @@ export async function speak(text: string, options: SpeakOptions = {}) {
   try {
     console.log("[Voice] Attempting to speak:", text.substring(0, 50));
     await initVoice();
-    console.log("[Voice] Selected voice:", _voice);
+    console.log("[Voice] Selected voice identifier:", _voice);
     await Speech.stop();
     
     // Add error handlers
     const wrappedOptions = {
       voice: _voice ?? undefined,
       language: "en-GB",
-      rate: 0.85,      // Slightly slower for deeper sound
-      pitch: 0.75,     // LOWER pitch for male/JARVIS voice
+      rate: 0.80,      // Slower for deeper, more dramatic sound
+      pitch: 0.65,     // MUCH LOWER pitch for deep male JARVIS voice
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();
