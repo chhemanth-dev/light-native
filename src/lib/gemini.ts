@@ -125,7 +125,7 @@ async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<s
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[Gemini API] Error response:', errorText);
-    throw new Error(`API error: ${response.status} - ${errorText}`);
+    throw new Error('API error: ' + response.status + ' - ' + errorText);
   }
 
   const data = await response.json();
@@ -144,15 +144,15 @@ async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<s
 
 function buildPrompt(messages: AIMessage[], context?: string): string {
   const parts: string[] = [SYSTEM_PROMPT];
-  if (context) parts.push(`\n[Context]\n${context}`);
+  if (context) parts.push('\n[Context]\n' + context);
   parts.push("\n[Conversation]");
   for (const m of messages) {
     parts.push(
       m.role === "user"
-        ? `User: ${m.content}`
+        ? 'User: ' + m.content
         : m.role === "assistant"
-        ? `Light: ${m.content}`
-        : `System: ${m.content}`
+        ? 'Light: ' + m.content
+        : 'System: ' + m.content
     );
   }
   parts.push("Light:");
@@ -185,7 +185,7 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
           case '*': result = num1 * num2; break;
           case '/': result = num1 / num2; break;
         }
-        return `The result is ${result}, sir.`;
+        return 'The result is ' + result + ', sir.';
       }
     } catch (e) {
       // Fall through to default message
@@ -211,7 +211,7 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
     lastUser.includes("instagram")
   ) {
     if (context) {
-      return `Here is what I have, sir: ${context}`;
+      return 'Here is what I have, sir: ' + context;
     }
     return "I don't have any new messages to report at the moment, sir.";
   }
@@ -227,7 +227,7 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
       hour: "2-digit",
       minute: "2-digit",
     });
-    return `The current time is ${now}, sir.`;
+    return 'The current time is ' + now + ', sir.';
   }
 
   // Date
@@ -238,7 +238,7 @@ function offlineFallback(messages: AIMessage[], context?: string): string {
       month: "long",
       year: "numeric",
     });
-    return `Today is ${today}, sir.`;
+    return 'Today is ' + today + ', sir.';
   }
 
   // Weather (basic response)
