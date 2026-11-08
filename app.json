@@ -14,10 +14,10 @@
     },
     "android": {
       "package": "com.lightnative.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#050810"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0a0f1e"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",
