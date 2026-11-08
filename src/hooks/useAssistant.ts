@@ -125,8 +125,11 @@ export function useAssistant() {
       (data: { error: string }) => {
         console.error("[useAssistant] onSpeechError:", data.error);
         cleanup();
-        setAssistantState("idle");
-        // Don't automatically retry - let user press orb again
+        setAssistantState("error");
+        // Show the error to the user
+        setLastResponse(`Speech recognition failed: ${data.error}. Try using the TYPE INSTEAD button below.`);
+        // Auto-return to idle after showing error
+        setTimeout(() => setAssistantState("idle"), 3000);
       }
     );
 

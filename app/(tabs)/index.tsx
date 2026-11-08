@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
   SafeAreaView, AppState, PermissionsAndroid, Platform,
+  TextInput, Keyboard,
 } from "react-native";
 import * as Network from "expo-network";
 import { useAssistant } from "../../src/hooks/useAssistant";
@@ -65,6 +66,10 @@ export default function HomeScreen() {
   const [draftSender,  setDraftSender]  = useState("");
   const [draftApp,     setDraftApp]     = useState("");
   const [draftOriginal, setDraftOriginal] = useState("");
+  
+  // Text input fallback (for when mic doesn't work)
+  const [textInput, setTextInput] = useState("");
+  const [showTextInput, setShowTextInput] = useState(false);
 
   // Request mic on mount
   useEffect(() => {
@@ -169,6 +174,23 @@ export default function HomeScreen() {
       console.error("[HomeScreen] TEST: Error:", e);
     }
   }
+  
+  // TEXT INPUT handler - for when mic is broken
+  async function handleTextSubmit() {
+    if (!textInput.trim()) return;
+    try {
+      const input = textInput.trim();
+      setTextInput("");
+      Keyboard.dismiss();
+      setShowTextInput(false);
+      
+      await beginSession();
+      const { assistant } = await import("../../src/lib/assistant");
+      await assistant.handleInput(input);
+    } catch (e) {
+      console.error("[HomeScreen] Text input error:", e);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -234,6 +256,46 @@ export default function HomeScreen() {
         </Text>
       </View>
 
+      {/* TYPE INSTEAD button - for broken mic */}
+      {assistantState === "idle" && !showTextInput && (
+        <Pressable 
+          style={[styles.endBtn, { backgroundColor: "#0A1F1F", borderColor: "#0891B2", marginBottom: 8 }]} 
+          onPress={() => setShowTextInput(true)}
+        >
+          <Text style={[styles.endBtnText, { color: "#67E8F9" }]}>⌨️ Type Instead (Mic Broken?)</Text>
+        </Pressable>
+      )}
+      
+      {/* Text input field */}
+      {showTextInput && (
+        <View style={styles.textInputContainer}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Type your message..."
+            placeholderTextColor="#475569"
+            value={textInput}
+            onChangeText={setTextInput}
+            onSubmitEditing={handleTextSubmit}
+            returnKeyType="send"
+            autoFocus
+            multiline={false}
+          />
+          <Pressable 
+            style={[styles.sendBtn, !textInput.trim() && { opacity: 0.5 }]} 
+            onPress={handleTextSubmit}
+            disabled={!textInput.trim()}
+          >
+            <Text style={styles.sendBtnText}>SEND</Text>
+          </Pressable>
+          <Pressable 
+            style={styles.cancelBtn} 
+            onPress={() => { setShowTextInput(false); setTextInput(""); }}
+          >
+            <Text style={styles.cancelBtnText}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* TEST BUTTON - Remove after testing */}
       <Pressable 
         style={[styles.endBtn, { backgroundColor: "#0A1F0A", borderColor: "#22C55E", marginBottom: 8 }]} 
@@ -289,6 +351,48 @@ const styles = StyleSheet.create({
   unreadChipText: { color: "#93C5FD", fontSize: 13, textAlign: "center" },
   orbArea:   { alignItems: "center", paddingVertical: 24, gap: 8 },
   orbHint:   { color: "#334155", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase" },
+  textInputContainer: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+    alignItems: "center",
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    padding: 14,
+    color: "#E2E8F0",
+    fontSize: 15,
+  },
+  sendBtn: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  sendBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  cancelBtn: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    width: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    color: "#94A3B8",
+    fontSize: 20,
+    fontWeight: "300",
+  },
   endBtn: {
     marginHorizontal: 60, marginBottom: 12,
     backgroundColor: "#1A0A0A", borderWidth: 1, borderColor: "#7F1D1D",

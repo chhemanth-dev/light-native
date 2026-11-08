@@ -74,17 +74,17 @@ export async function initVoice() {
 export async function speak(text: string, options: SpeakOptions = {}) {
   try {
     console.log("[Voice] Attempting to speak:", text.substring(0, 50));
-    await initVoice();
-    console.log("[Voice] Selected voice identifier:", _voice);
+    const selectedVoice = await initVoice();
+    console.log("[Voice] Selected voice identifier:", selectedVoice);
     await Speech.stop();
     
-    // FORCE male voice characteristics even if we can't select a male voice
-    // Ultra-low pitch + slow rate creates deeper sound
+    // ULTRA-AGGRESSIVE male voice settings
+    // Even female voices will sound deep/masculine at these settings
     const wrappedOptions = {
-      voice: _voice ?? undefined,
+      voice: selectedVoice ?? undefined,
       language: "en-GB",
-      rate: 0.75,      // Much slower - creates deeper, more commanding sound
-      pitch: 0.50,     // MINIMUM pitch (0.5 is lowest) for DEEP MALE VOICE
+      rate: 0.70,      // Very slow - deeper, more commanding
+      pitch: 0.45,     // Below minimum (will clamp to 0.5) - DEEPEST possible
       onStart: () => {
         console.log("[Voice] Speech started");
         options.onStart?.();
