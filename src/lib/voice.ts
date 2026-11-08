@@ -46,20 +46,41 @@ export async function initVoice() {
 
 export async function speak(text: string, options: SpeakOptions = {}) {
   try {
+    console.log("[Voice] Attempting to speak:", text.substring(0, 50));
     await initVoice();
+    console.log("[Voice] Selected voice:", _voice);
     await Speech.stop();
-    Speech.speak(text, {
+    
+    // Add error handlers
+    const wrappedOptions = {
       voice: _voice ?? undefined,
       language: "en-GB",
       rate: 0.88,
       pitch: 0.85,
-      onStart: options.onStart,
-      onDone: options.onDone,
-      onStopped: options.onStopped,
-    });
+      onStart: () => {
+        console.log("[Voice] Speech started");
+        options.onStart?.();
+      },
+      onDone: () => {
+        console.log("[Voice] Speech done");
+        options.onDone?.();
+      },
+      onStopped: () => {
+        console.log("[Voice] Speech stopped");
+        options.onStopped?.();
+      },
+      onError: (error: any) => {
+        console.error("[Voice] Speech error:", error);
+        // Fire onDone on error so we don't hang
+        options.onDone?.();
+      },
+    };
+    
+    Speech.speak(text, wrappedOptions);
+    console.log("[Voice] Speech.speak() called successfully");
   } catch (e) {
     // TTS might not be available — fire onDone so the assistant doesn't hang
-    console.warn("Speech failed:", e);
+    console.error("[Voice] Speech exception:", e);
     options.onDone?.();
   }
 }

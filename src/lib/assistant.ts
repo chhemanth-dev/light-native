@@ -57,6 +57,7 @@ export class LightAssistant {
   async handleInput(userText: string) {
     if (!userText.trim()) return;
 
+    console.log("[Assistant] handleInput:", userText);
     this.setState("thinking");
     this.emit({ type: "transcript", text: userText });
 
@@ -70,16 +71,21 @@ export class LightAssistant {
         });
       }
 
+      console.log("[Assistant] Checking local intent...");
       const localResponse = await this.handleLocalIntent(userText);
       if (localResponse) {
+        console.log("[Assistant] Local response:", localResponse.substring(0, 50));
         await this.respond(localResponse, true);
         return;
       }
 
+      console.log("[Assistant] Building context...");
       const context = await this.buildContext(userText);
       this.history.push({ role: "user", content: userText });
 
+      console.log("[Assistant] Asking AI...");
       const { text, offline } = await ask(this.history, context);
+      console.log("[Assistant] AI response (offline=" + offline + "):", text.substring(0, 50));
       this.history.push({ role: "assistant", content: text });
 
       if (this.history.length > 20) {
@@ -89,6 +95,7 @@ export class LightAssistant {
       await this.respond(text, offline);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
+      console.error("[Assistant] Error:", msg, e);
       this.setState("error");
       this.emit({ type: "error", message: msg });
       // Don't try to speak the error message — just go idle
@@ -98,6 +105,8 @@ export class LightAssistant {
   }
 
   private async respond(text: string, offline: boolean) {
+    console.log("[Assistant] respond() called with text:", text.substring(0, 100));
+    console.log("[Assistant] offline:", offline);
     this.setState("speaking");
     this.emit({ type: "response", text, offline });
 
@@ -112,16 +121,20 @@ export class LightAssistant {
       }
     } catch {
       // DB might not be ready — ignore
+      console.warn("[Assistant] DB save failed (ignore)");
     }
 
+    console.log("[Assistant] Calling speak()...");
     // speak() now has its own error handling that fires onDone on failure
     await new Promise<void>((resolve) => {
       speak(text, {
         onDone: () => {
+          console.log("[Assistant] speak() onDone called");
           this.setState("idle");
           resolve();
         },
         onStopped: () => {
+          console.log("[Assistant] speak() onStopped called");
           this.setState("idle");
           resolve();
         },
