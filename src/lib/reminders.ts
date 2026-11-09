@@ -2,8 +2,39 @@
  * Reminder System - Sets Android alarms/reminders
  */
 import { NativeModules, Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 
 const ReminderModule = Platform.OS === "android" ? NativeModules.ReminderModule : null;
+
+// Check if module is available
+function isReminderModuleAvailable(): boolean {
+  if (!ReminderModule) {
+    console.warn('[Reminders] Module not available - not on Android or module not registered');
+    return false;
+  }
+  if (typeof ReminderModule.setReminder !== 'function') {
+    console.warn('[Reminders] setReminder method not found on module');
+    return false;
+  }
+  return true;
+}
+
+/** Request notification permissions (for reminder notifications) */
+export async function requestNotificationPermission(): Promise<boolean> {
+  try {
+    const { status } = await Notifications.requestPermissionsAsync({
+      android: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+    return status === "granted";
+  } catch (e) {
+    console.warn('[Reminders] Permission request failed:', e);
+    return false;
+  }
+}
 
 export interface ReminderOptions {
   title: string;
@@ -14,8 +45,8 @@ export interface ReminderOptions {
  * Set a reminder/alarm
  */
 export async function setReminder(options: ReminderOptions): Promise<string> {
-  if (!ReminderModule) {
-    throw new Error("Reminders are only available on Android");
+  if (!isReminderModuleAvailable()) {
+    throw new Error("Reminder module is not available");
   }
 
   const timestampMillis = options.time.getTime();
@@ -36,8 +67,8 @@ export async function setReminder(options: ReminderOptions): Promise<string> {
  * Cancel a reminder
  */
 export async function cancelReminder(time: Date): Promise<string> {
-  if (!ReminderModule) {
-    throw new Error("Reminders are only available on Android");
+  if (!isReminderModuleAvailable()) {
+    throw new Error("Reminder module is not available");
   }
 
   const timestampMillis = time.getTime();

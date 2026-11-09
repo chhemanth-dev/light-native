@@ -3,10 +3,32 @@
  * Handles complex questions by using cloud AI and real-time web data.
  */
 import { NativeModules, Platform } from "react-native";
-import { smartSearch, getWeather } from "./websearch";
-import { parseReminderCommand, setReminder } from "./reminders";
 
 const GeminiNanoModule = Platform.OS === "android" ? NativeModules.GeminiNanoModule : null;
+
+// Lazy load optional modules to prevent startup crashes
+let smartSearch: any = null;
+let getWeather: any = null;
+let parseReminderCommand: any = null;
+let setReminder: any = null;
+
+async function loadOptionalModules() {
+  try {
+    const websearch = await import("./websearch");
+    smartSearch = websearch.smartSearch;
+    getWeather = websearch.getWeather;
+  } catch (e) {
+    console.warn('[AI] Web search module not available:', e);
+  }
+  
+  try {
+    const reminders = await import("./reminders");
+    parseReminderCommand = reminders.parseReminderCommand;
+    setReminder = reminders.setReminder;
+  } catch (e) {
+    console.warn('[AI] Reminders module not available:', e);
+  }
+}
 
 // Google Gemini API - Free tier
 const GEMINI_API_KEY = "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM";
@@ -68,39 +90,42 @@ export async function ask(
   messages: AIMessage[],
   context?: string
 ): Promise<AIResponse> {
+  // Load optional modules on first use
+  if (!smartSearch && !parseReminderCommand) {
+    await loadOptionalModules();
+  }
+  
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content.toLowerCase() || "";
   
   // Step 1: Check if this is a reminder request
-  const reminderMatch = parseReminderCommand(lastUserMessage);
-  if (reminderMatch) {
+  if (parseReminderCommand && setReminder) {
     try {
-      await setReminder(reminderMatch);
-      const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      });
-      const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
-      const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
-      return {
-        text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
-        offline: false
-      };
+      const reminderMatch = parseReminderCommand(lastUserMessage);
+      if (reminderMatch) {
+        await setReminder(reminderMatch);
+        const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        });
+        const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
+        const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
+        return {
+          text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
+          offline: false
+        };
+      }
     } catch (e) {
-      console.error('[AI] Reminder failed:', e);
-      return {
-        text: "I apologize, sir. I encountered an issue setting that reminder. Please ensure the app has alarm permissions.",
-        offline: true
-      };
+      console.error('[AI] Reminder processing failed:', e);
     }
   }
   
   // Step 2: Check if this is a weather query
-  if (lastUserMessage.includes('weather')) {
+  if (getWeather && lastUserMessage.includes('weather')) {
     try {
       const weatherData = await getWeather();
       if (weatherData) {
@@ -122,7 +147,7 @@ export async function ask(
     lastUserMessage.includes('explain') ||
     lastUserMessage.includes('tell me about');
   
-  if (needsWebSearch) {
+  if (smartSearch && needsWebSearch) {
     try {
       console.log('[AI] Attempting web search for factual query');
       const webResult = await smartSearch(lastUserMessage);
