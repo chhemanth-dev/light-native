@@ -122,11 +122,20 @@ export async function ask(
     console.log('[AI] Modules loaded. smartSearch:', !!smartSearch, 'checkInternet:', !!checkInternetConnection);
   }
   
-  // Check internet connection FIRST
+  // Check internet connection FIRST - BLOCK if offline
   let hasInternet = true;
   if (checkInternetConnection) {
     hasInternet = await checkInternetConnection();
     console.log('[AI] Internet connection:', hasInternet);
+  }
+  
+  // STRICT ONLINE-ONLY MODE - Reject if offline
+  if (!hasInternet) {
+    console.log('[AI] NO INTERNET - Refusing to process (online-only mode)');
+    return { 
+      text: "I apologize, sir. Light requires an active internet connection to function. Please connect to WiFi or mobile data and try again.",
+      offline: true 
+    };
   }
   
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
@@ -185,7 +194,8 @@ export async function ask(
       if (reminderMatch) {
         console.log('[AI] Reminder detected:', reminderMatch);
         try {
-          await setReminder(reminderMatch);
+          const result = await setReminder(reminderMatch);
+          console.log('[AI] Reminder set successfully:', result);
           const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
             hour: "2-digit",
             minute: "2-digit",
@@ -203,22 +213,22 @@ export async function ask(
           };
         } catch (reminderError: any) {
           console.error('[AI] Reminder set failed:', reminderError);
+          console.error('[AI] Error details:', reminderError.message, reminderError.stack);
           return {
-            text: "I apologize, sir. I couldn't set that reminder. " + (reminderError.message || 'Please check alarm permissions.'),
+            text: "I apologize, sir. I encountered an error setting that reminder: " + (reminderError.message || 'Unknown error. Please try again or check alarm permissions.'),
             offline: false
           };
         }
       }
-    } catch (e) {
-      console.error('[AI] Reminder parsing failed:', e);
+    } catch (parseError: any) {
+      console.error('[AI] Reminder parsing failed:', parseError);
+      console.error('[AI] Parse error details:', parseError.message);
+      // Continue to other processing instead of failing
     }
   }
   
-  // Only try online services if internet is available
-  if (!hasInternet) {
-    console.log('[AI] No internet - skipping online services');
-    return { text: offlineFallback(messages, context), offline: true };
-  }
+  // Only try online services if internet is available (ALREADY CHECKED ABOVE - THIS IS REDUNDANT NOW)
+  // If we got here, we have internet (or we would have returned error already)
   
   // Step 4: Check if this is a weather query
   if (getWeather && lowerMessage.includes('weather')) {
@@ -283,9 +293,12 @@ export async function ask(
     console.error('[AI] Gemini API failed:', e);
   }
 
-  // Step 8: Offline fallback (only if everything else failed)
-  console.log('[AI] All online services failed, using offline fallback');
-  return { text: offlineFallback(messages, context), offline: true };
+  // Step 8: If everything failed with internet, show error
+  console.log('[AI] All online services failed - showing error');
+  return { 
+    text: "I apologize, sir. I'm experiencing technical difficulties connecting to my systems. Please check your internet connection and try again.",
+    offline: true 
+  };
 }
 
 /**

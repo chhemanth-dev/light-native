@@ -10,6 +10,7 @@ import { isSetupDone } from "../src/lib/vault";
 import { getDb } from "../src/lib/db";
 import { useAppStore } from "../src/store/appStore";
 import { router } from "expo-router";
+import { initializeNotifications } from "../src/lib/notificationSetup";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -20,6 +21,10 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
+        // Initialize notifications first (channels, permissions, handler)
+        await initializeNotifications();
+        
+        // Then initialize database and check setup status
         await getDb();
         const setup = await isSetupDone();
         setSetupDone(setup);
@@ -29,7 +34,8 @@ export default function RootLayout() {
           setLocked(true);
           setInitialRoute("/lock");
         }
-      } catch {
+      } catch (err) {
+        console.error("Error during app initialization:", err);
         // If anything fails, go to setup so the user isn't stuck
         setInitialRoute("/setup");
       } finally {

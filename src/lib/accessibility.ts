@@ -71,6 +71,44 @@ export async function openApp(packageName: string): Promise<string> {
 }
 
 /**
+ * Check if an app is installed
+ */
+export async function isAppInstalled(packageName: string): Promise<boolean> {
+  if (!AccessibilityModule?.isAppInstalled) {
+    console.warn('[Accessibility] isAppInstalled not available');
+    return false;
+  }
+
+  try {
+    const installed = await AccessibilityModule.isAppInstalled(packageName);
+    console.log('[Accessibility] App installed check:', packageName, installed);
+    return installed;
+  } catch (error) {
+    console.error('[Accessibility] Install check failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Get list of installed popular apps
+ */
+export async function getInstalledApps(): Promise<Array<{packageName: string, appName: string}>> {
+  if (!AccessibilityModule?.getInstalledApps) {
+    console.warn('[Accessibility] getInstalledApps not available');
+    return [];
+  }
+
+  try {
+    const apps = await AccessibilityModule.getInstalledApps();
+    console.log('[Accessibility] Installed apps:', apps.length);
+    return apps;
+  } catch (error) {
+    console.error('[Accessibility] Get installed apps failed:', error);
+    return [];
+  }
+}
+
+/**
  * Send SMS
  */
 export async function sendSMS(phoneNumber: string, message: string): Promise<string> {

@@ -40,6 +40,53 @@ class AccessibilityModule(private val reactContext: ReactApplicationContext) : R
     }
 
     @ReactMethod
+    fun isAppInstalled(packageName: String, promise: Promise) {
+        try {
+            reactContext.packageManager.getPackageInfo(packageName, 0)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun getInstalledApps(promise: Promise) {
+        try {
+            val popularApps = mapOf(
+                "com.whatsapp" to "WhatsApp",
+                "com.instagram.android" to "Instagram",
+                "com.google.android.gm" to "Gmail",
+                "com.google.android.apps.messaging" to "Messages",
+                "com.facebook.orca" to "Messenger",
+                "org.telegram.messenger" to "Telegram",
+                "com.snapchat.android" to "Snapchat",
+                "com.twitter.android" to "Twitter",
+                "com.linkedin.android" to "LinkedIn",
+                "com.discord" to "Discord",
+                "com.slack" to "Slack",
+                "com.microsoft.teams" to "Teams"
+            )
+
+            val installed = Arguments.createArray()
+            for ((packageName, appName) in popularApps) {
+                try {
+                    reactContext.packageManager.getPackageInfo(packageName, 0)
+                    val appMap = Arguments.createMap().apply {
+                        putString("packageName", packageName)
+                        putString("appName", appName)
+                    }
+                    installed.pushMap(appMap)
+                } catch (e: Exception) {
+                    // App not installed, skip
+                }
+            }
+            promise.resolve(installed)
+        } catch (e: Exception) {
+            promise.reject("GET_APPS_ERROR", "Failed to get installed apps: ${e.message}")
+        }
+    }
+
+    @ReactMethod
     fun sendSMS(phoneNumber: String, message: String, promise: Promise) {
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
