@@ -11,6 +11,12 @@ let smartSearch: any = null;
 let getWeather: any = null;
 let parseReminderCommand: any = null;
 let setReminder: any = null;
+let checkInternetConnection: any = null;
+let makePhoneCall: any = null;
+let parseCallCommand: any = null;
+let openApp: any = null;
+let parseOpenAppCommand: any = null;
+let requestCallPermission: any = null;
 
 async function loadOptionalModules() {
   try {
@@ -27,6 +33,18 @@ async function loadOptionalModules() {
     setReminder = reminders.setReminder;
   } catch (e) {
     console.warn('[AI] Reminders module not available:', e);
+  }
+  
+  try {
+    const accessibility = await import("./accessibility");
+    checkInternetConnection = accessibility.checkInternetConnection;
+    makePhoneCall = accessibility.makePhoneCall;
+    parseCallCommand = accessibility.parseCallCommand;
+    openApp = accessibility.openApp;
+    parseOpenAppCommand = accessibility.parseOpenAppCommand;
+    requestCallPermission = accessibility.requestCallPermission;
+  } catch (e) {
+    console.warn('[AI] Accessibility module not available:', e);
   }
 }
 
@@ -47,6 +65,8 @@ export type AIResponse = {
 const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant with the manner of a refined British butler — similar in character to J.A.R.V.I.S. from Iron Man.\n\n" +
 "Your capabilities:\n" +
 "- Read and summarize notifications from WhatsApp, Instagram, Gmail, etc.\n" +
+"- MAKE PHONE CALLS hands-free (user says 'call <number>')\n" +
+"- OPEN APPS hands-free (WhatsApp, Instagram, Gmail, Maps, Chrome, YouTube, Camera, Settings)\n" +
 "- SET REMINDERS with exact times (user will say 'remind me to X at Y')\n" +
 "- SEARCH THE WEB for current facts, news, and information\n" +
 "- Get REAL-TIME WEATHER data\n" +
@@ -60,6 +80,8 @@ const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant wit
 "- Address the user as \"sir\" or \"ma'am\" occasionally, but not every sentence.\n" +
 "- When reading messages: give a concise summary and offer to draft a reply.\n" +
 "- When user asks about current facts (who/what/when/where): the system will fetch live data from the web\n" +
+"- For calls: system automatically makes the call\n" +
+"- For app opening: system automatically opens the requested app\n" +
 "- For reminders: system automatically handles setting Android alarms\n" +
 "- For calculations: show the work and result clearly\n" +
 "- Never reveal contents of private messages unprompted. Wait to be asked.\n" +
@@ -67,6 +89,8 @@ const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant wit
 "- Be helpful, accurate, and productive. You're here to make the user's life easier.\n\n" +
 "Examples:\n" +
 "- \"What is 25 * 137?\" → \"The result is 3,425, sir.\"\n" +
+"- \"Call 1234567890\" → System makes the call\n" +
+"- \"Open WhatsApp\" → System opens WhatsApp\n" +
 "- \"Remind me to call John at 3pm\" → System sets alarm automatically\n" +
 "- \"Who is Elon Musk?\" → Fetches current info from web\n" +
 "- \"What's the weather?\" → Gets real-time weather data\n" +
@@ -84,7 +108,7 @@ export async function isGeminiNanoAvailable(): Promise<boolean> {
 
 /**
  * Ask AI with conversation history.
- * Tries: 1) Check for reminders, 2) Web search for facts, 3) Gemini Nano, 4) Gemini API (cloud), 5) Offline fallback
+ * ALWAYS tries online first, only uses offline if no internet connection
  */
 export async function ask(
   messages: AIMessage[],
@@ -93,44 +117,110 @@ export async function ask(
   console.log('[AI] ask() called, loading optional modules...');
   
   // Load optional modules on first use
-  if (!smartSearch && !parseReminderCommand) {
+  if (!smartSearch && !parseReminderCommand && !checkInternetConnection) {
     await loadOptionalModules();
-    console.log('[AI] Modules loaded. smartSearch:', !!smartSearch, 'parseReminderCommand:', !!parseReminderCommand);
+    console.log('[AI] Modules loaded. smartSearch:', !!smartSearch, 'checkInternet:', !!checkInternetConnection);
+  }
+  
+  // Check internet connection FIRST
+  let hasInternet = true;
+  if (checkInternetConnection) {
+    hasInternet = await checkInternetConnection();
+    console.log('[AI] Internet connection:', hasInternet);
   }
   
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
   const lowerMessage = lastUserMessage.toLowerCase();
-  console.log('[AI] Processing query:', lastUserMessage.substring(0, 50));
+  console.log('[AI] Processing query:', lastUserMessage.substring(0, 50), '| Has Internet:', hasInternet);
   
-  // Step 1: Check if this is a reminder request
+  // Step 1: Check for phone call command
+  if (parseCallCommand && makePhoneCall) {
+    const phoneNumber = parseCallCommand(lowerMessage);
+    if (phoneNumber) {
+      console.log('[AI] Call command detected:', phoneNumber);
+      try {
+        if (requestCallPermission) {
+          await requestCallPermission();
+        }
+        await makePhoneCall(phoneNumber);
+        return {
+          text: "Calling " + phoneNumber + " now, sir.",
+          offline: false
+        };
+      } catch (e: any) {
+        console.error('[AI] Call failed:', e);
+        return {
+          text: "I apologize, sir. I couldn't make that call. " + (e.message || 'Please check permissions.'),
+          offline: false
+        };
+      }
+    }
+  }
+  
+  // Step 2: Check for app open command
+  if (parseOpenAppCommand && openApp) {
+    const packageName = parseOpenAppCommand(lowerMessage);
+    if (packageName) {
+      console.log('[AI] Open app command detected:', packageName);
+      try {
+        await openApp(packageName);
+        return {
+          text: "Opening the app now, sir.",
+          offline: false
+        };
+      } catch (e: any) {
+        console.error('[AI] Open app failed:', e);
+        return {
+          text: "I apologize, sir. I couldn't open that app. " + (e.message || ''),
+          offline: false
+        };
+      }
+    }
+  }
+  
+  // Step 3: Check if this is a reminder request
   if (parseReminderCommand && setReminder) {
     try {
       const reminderMatch = parseReminderCommand(lowerMessage);
       if (reminderMatch) {
         console.log('[AI] Reminder detected:', reminderMatch);
-        await setReminder(reminderMatch);
-        const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        });
-        const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
-        const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
-        return {
-          text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
-          offline: false
-        };
+        try {
+          await setReminder(reminderMatch);
+          const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          });
+          const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
+          const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
+          return {
+            text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
+            offline: false
+          };
+        } catch (reminderError: any) {
+          console.error('[AI] Reminder set failed:', reminderError);
+          return {
+            text: "I apologize, sir. I couldn't set that reminder. " + (reminderError.message || 'Please check alarm permissions.'),
+            offline: false
+          };
+        }
       }
     } catch (e) {
-      console.error('[AI] Reminder processing failed:', e);
+      console.error('[AI] Reminder parsing failed:', e);
     }
   }
   
-  // Step 2: Check if this is a weather query
+  // Only try online services if internet is available
+  if (!hasInternet) {
+    console.log('[AI] No internet - skipping online services');
+    return { text: offlineFallback(messages, context), offline: true };
+  }
+  
+  // Step 4: Check if this is a weather query
   if (getWeather && lowerMessage.includes('weather')) {
     console.log('[AI] Weather query detected, fetching...');
     try {
@@ -144,7 +234,7 @@ export async function ask(
     }
   }
   
-  // Step 3: Check if this is a factual question that needs web search
+  // Step 5: Check if this is a factual question that needs web search
   const needsWebSearch = 
     lowerMessage.includes('who is') ||
     lowerMessage.includes('who was') ||
@@ -168,7 +258,7 @@ export async function ask(
     }
   }
   
-  // Step 4: Try Gemini Nano (on-device)
+  // Step 6: Try Gemini Nano (on-device)
   console.log('[AI] Checking Gemini Nano...');
   const nanoAvailable = await isGeminiNanoAvailable();
   console.log('[AI] Gemini Nano available:', nanoAvailable);
@@ -183,7 +273,7 @@ export async function ask(
     }
   }
 
-  // Step 5: Try Gemini API (cloud)
+  // Step 7: Try Gemini API (cloud) - ALWAYS try if internet is available
   console.log('[AI] Trying Gemini API (cloud)...');
   try {
     const text = await callGeminiAPI(messages, context);
@@ -193,8 +283,8 @@ export async function ask(
     console.error('[AI] Gemini API failed:', e);
   }
 
-  // Step 6: Offline fallback
-  console.log('[AI] Using offline fallback');
+  // Step 8: Offline fallback (only if everything else failed)
+  console.log('[AI] All online services failed, using offline fallback');
   return { text: offlineFallback(messages, context), offline: true };
 }
 

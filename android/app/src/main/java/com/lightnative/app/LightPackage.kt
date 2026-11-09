@@ -12,6 +12,7 @@ class LightPackage : ReactPackage {
         WakeWordModule(reactContext),
         SpeechModule(reactContext),
         ReminderModule(reactContext),
+        AccessibilityModule(reactContext),
     )
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
