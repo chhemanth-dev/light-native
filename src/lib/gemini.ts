@@ -90,18 +90,24 @@ export async function ask(
   messages: AIMessage[],
   context?: string
 ): Promise<AIResponse> {
+  console.log('[AI] ask() called, loading optional modules...');
+  
   // Load optional modules on first use
   if (!smartSearch && !parseReminderCommand) {
     await loadOptionalModules();
+    console.log('[AI] Modules loaded. smartSearch:', !!smartSearch, 'parseReminderCommand:', !!parseReminderCommand);
   }
   
-  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content.toLowerCase() || "";
+  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
+  const lowerMessage = lastUserMessage.toLowerCase();
+  console.log('[AI] Processing query:', lastUserMessage.substring(0, 50));
   
   // Step 1: Check if this is a reminder request
   if (parseReminderCommand && setReminder) {
     try {
-      const reminderMatch = parseReminderCommand(lastUserMessage);
+      const reminderMatch = parseReminderCommand(lowerMessage);
       if (reminderMatch) {
+        console.log('[AI] Reminder detected:', reminderMatch);
         await setReminder(reminderMatch);
         const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
           hour: "2-digit",
@@ -125,61 +131,70 @@ export async function ask(
   }
   
   // Step 2: Check if this is a weather query
-  if (getWeather && lastUserMessage.includes('weather')) {
+  if (getWeather && lowerMessage.includes('weather')) {
+    console.log('[AI] Weather query detected, fetching...');
     try {
       const weatherData = await getWeather();
+      console.log('[AI] Weather result:', weatherData);
       if (weatherData) {
         return { text: "The current weather is: " + weatherData, offline: false };
       }
     } catch (e) {
-      console.warn('[AI] Weather fetch failed:', e);
+      console.error('[AI] Weather fetch failed:', e);
     }
   }
   
   // Step 3: Check if this is a factual question that needs web search
   const needsWebSearch = 
-    lastUserMessage.includes('who is') ||
-    lastUserMessage.includes('who was') ||
-    lastUserMessage.includes('what is') ||
-    lastUserMessage.includes('when did') ||
-    lastUserMessage.includes('where is') ||
-    lastUserMessage.includes('how many') ||
-    lastUserMessage.includes('explain') ||
-    lastUserMessage.includes('tell me about');
+    lowerMessage.includes('who is') ||
+    lowerMessage.includes('who was') ||
+    lowerMessage.includes('what is') ||
+    lowerMessage.includes('when did') ||
+    lowerMessage.includes('where is') ||
+    lowerMessage.includes('how many') ||
+    lowerMessage.includes('explain') ||
+    lowerMessage.includes('tell me about');
   
   if (smartSearch && needsWebSearch) {
+    console.log('[AI] Web search triggered for:', lastUserMessage);
     try {
-      console.log('[AI] Attempting web search for factual query');
       const webResult = await smartSearch(lastUserMessage);
+      console.log('[AI] Web search result length:', webResult?.length, 'content:', webResult?.substring(0, 100));
       if (webResult && webResult.length > 20 && !webResult.includes('could not find')) {
         return { text: webResult, offline: false };
       }
     } catch (e) {
-      console.warn('[AI] Web search failed:', e);
+      console.error('[AI] Web search failed:', e);
     }
   }
   
   // Step 4: Try Gemini Nano (on-device)
+  console.log('[AI] Checking Gemini Nano...');
   const nanoAvailable = await isGeminiNanoAvailable();
+  console.log('[AI] Gemini Nano available:', nanoAvailable);
   if (nanoAvailable) {
     try {
       const fullPrompt = buildPrompt(messages, context);
       const text: string = await GeminiNanoModule.generateText(fullPrompt);
+      console.log('[AI] Gemini Nano success:', text.substring(0, 50));
       return { text: text.trim(), offline: false };
     } catch (e) {
-      console.warn("Gemini Nano failed:", e);
+      console.error('[AI] Gemini Nano failed:', e);
     }
   }
 
   // Step 5: Try Gemini API (cloud)
+  console.log('[AI] Trying Gemini API (cloud)...');
   try {
     const text = await callGeminiAPI(messages, context);
+    console.log('[AI] Gemini API success:', text.substring(0, 50));
     return { text, offline: false };
   } catch (e) {
-    console.warn("Gemini API failed:", e);
+    console.error('[AI] Gemini API failed:', e);
   }
 
   // Step 6: Offline fallback
+  console.log('[AI] Using offline fallback');
   return { text: offlineFallback(messages, context), offline: true };
 }
 
@@ -189,7 +204,7 @@ export async function ask(
 async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<string> {
   console.log('[Gemini API] Starting API call...');
   const fullPrompt = buildPrompt(messages, context);
-  console.log('[Gemini API] Prompt:', fullPrompt.substring(0, 100) + '...');
+  console.log('[Gemini API] Prompt length:', fullPrompt.length);
   
   const requestBody = {
     contents: [{
@@ -202,36 +217,54 @@ async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<s
   };
   
   console.log('[Gemini API] Calling:', GEMINI_API_URL);
+  console.log('[Gemini API] Request body size:', JSON.stringify(requestBody).length);
   
-  const apiUrl = GEMINI_API_URL + '?key=' + GEMINI_API_KEY;
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  // Add timeout to prevent hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  
+  try {
+    const apiUrl = GEMINI_API_URL + '?key=' + GEMINI_API_KEY;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
 
-  console.log('[Gemini API] Response status:', response.status);
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[Gemini API] Error response:', errorText);
-    throw new Error('API error: ' + response.status + ' - ' + errorText);
+    clearTimeout(timeoutId);
+    console.log('[Gemini API] Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Gemini API] Error response:', errorText);
+      throw new Error('API error: ' + response.status + ' - ' + errorText);
+    }
+
+    const data = await response.json();
+    console.log('[Gemini API] Response received, parsing...');
+    
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!text) {
+      console.error('[Gemini API] No text in response:', JSON.stringify(data).substring(0, 200));
+      throw new Error('No response from API');
+    }
+
+    console.log('[Gemini API] Success! Text length:', text.length);
+    return text.trim();
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error('[Gemini API] Request timeout after 30 seconds');
+      throw new Error('API request timed out');
+    }
+    console.error('[Gemini API] Fetch error:', error);
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const data = await response.json();
-  console.log('[Gemini API] Response data:', JSON.stringify(data).substring(0, 200));
-  
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  
-  if (!text) {
-    console.error('[Gemini API] No text in response:', JSON.stringify(data));
-    throw new Error('No response from API');
-  }
-
-  console.log('[Gemini API] Success! Text:', text.substring(0, 100));
-  return text.trim();
 }
 
 function buildPrompt(messages: AIMessage[], context?: string): string {
