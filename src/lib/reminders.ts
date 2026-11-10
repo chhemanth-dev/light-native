@@ -231,3 +231,13 @@ export function formatRemindersForSpeech(reminders: any[]): string {
   return `You have ${count} reminders. The next one is: ${first.title} at ${firstTime}.`;
 }
 
+/**
+ * Cancel all reminders (for settings/reminders tabs)
+ */
+export async function cancelAllReminders(): Promise<void> {
+  console.log('[Reminders] Cancelling all reminders...');
+  // This would need to be implemented in the native module
+  // For now, just log it
+  console.warn('[Reminders] cancelAllReminders not yet implemented in native module');
+}
+

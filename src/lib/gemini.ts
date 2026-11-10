@@ -40,9 +40,15 @@ async function loadOptionalModules() {
     openApp = accessibility.openApp;
     parseOpenAppCommand = accessibility.parseOpenAppCommand;
     requestCallPermission = accessibility.requestCallPermission;
-    sendMessageViaAccessibility = accessibility.sendMessageViaAccessibility; // NEW!
   } catch (e) {
     console.warn('[AI] Accessibility module not available:', e);
+  }
+  
+  try {
+    const messageSender = await import("./message-sender");
+    sendMessageViaAccessibility = messageSender.sendMessageViaAccessibility;
+  } catch (e) {
+    console.warn('[AI] Message sender module not available:', e);
   }
 }
 

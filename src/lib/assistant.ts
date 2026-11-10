@@ -190,7 +190,7 @@ export class LightAssistant {
       if (parsed) {
         try {
           await scheduleReminder(parsed);
-          return formatReminderConfirmation(parsed.title, parsed.fireAt);
+          return formatReminderConfirmation(parsed.title, parsed.time);
         } catch {
           return "I'm sorry, sir. I couldn't schedule that reminder.";
         }

@@ -14,7 +14,8 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { setAIProvider, getAIProvider, setAPIKey, isProviderConfigured, AIProvider } from '../src/lib/ai-providers';
+import { setAIProvider, getAIProvider } from '../src/lib/gemini';
+import { setAPIKey, isProviderConfigured, AIProvider } from '../src/lib/ai-providers';
 import { saveAPIKey, loadAPIKey } from '../src/config/api-keys';
 
 export default function AISettingsScreen() {
