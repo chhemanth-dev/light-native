@@ -13,6 +13,7 @@ class LightPackage : ReactPackage {
         SpeechModule(reactContext),
         ReminderModule(reactContext),
         AccessibilityModule(reactContext),
+        AccessibilityAutoClickModule(reactContext), // NEW: Message sending automation
     )
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()

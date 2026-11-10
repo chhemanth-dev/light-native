@@ -11,6 +11,7 @@ import { getDb } from "../src/lib/db";
 import { useAppStore } from "../src/store/appStore";
 import { router } from "expo-router";
 import { initializeNotifications } from "../src/lib/notificationSetup";
+import { initializeMyAPIKeys } from "../src/config/init-api-keys.local";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -21,7 +22,10 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        // Initialize notifications first (channels, permissions, handler)
+        // Initialize API keys FIRST (Claude, OpenAI, etc.)
+        initializeMyAPIKeys();
+        
+        // Initialize notifications (channels, permissions, handler)
         await initializeNotifications();
         
         // Then initialize database and check setup status

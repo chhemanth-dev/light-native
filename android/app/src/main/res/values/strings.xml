@@ -2,4 +2,5 @@
   <string name="app_name">Light</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="accessibility_service_description">Light needs accessibility access to send messages on your behalf. This allows hands-free messaging via WhatsApp, Instagram, Messenger, and more. Light can only send messages you explicitly request.</string>
 </resources>
