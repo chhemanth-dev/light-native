@@ -31,7 +31,18 @@ class AccessibilityAutoClickModule(
             "telegram" to "org.telegram.messenger",
             "sms" to "com.google.android.apps.messaging"
         )
+        
+        // Pending message storage
+        var pendingMessage: PendingMessage? = null
     }
+    
+    // Pending message data class
+    data class PendingMessage(
+        val packageName: String,
+        val recipient: String,
+        val message: String,
+        val promise: Promise
+    )
 
     /**
      * Send message via accessibility automation
@@ -110,18 +121,6 @@ class AccessibilityAutoClickModule(
         ) ?: ""
         
         return enabledServices.contains(serviceName)
-    }
-
-    // Pending message data class
-    data class PendingMessage(
-        val packageName: String,
-        val recipient: String,
-        val message: String,
-        val promise: Promise
-    )
-
-    companion object {
-        var pendingMessage: PendingMessage? = null
     }
 }
 
