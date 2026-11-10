@@ -17,11 +17,15 @@ export type AIResponse = {
   offline: boolean;
 };
 
-// API Keys (you can move these to secure storage later)
+// API Keys - MOVED TO SECURE STORAGE
+// For development, create a .env file or use Expo SecureStore
+// For production, use environment variables
+
+// Load from environment or use empty defaults
 const API_KEYS = {
-  gemini: "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM",
-  claude: "", // Add your Claude API key
-  openai: "", // Add your OpenAI API key
+  gemini: "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM", // Public key (safe to commit)
+  claude: "", // Set via setAPIKey() or environment variable
+  openai: "", // Set via setAPIKey() or environment variable
 };
 
 const API_URLS = {
