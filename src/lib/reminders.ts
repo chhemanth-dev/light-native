@@ -182,3 +182,52 @@ export function parseReminderCommand(command: string): ReminderOptions | null {
   
   return null;
 }
+
+/**
+ * Alias for parseReminderCommand (used by assistant.ts)
+ */
+export function parseReminderFromSpeech(command: string): ReminderOptions | null {
+  return parseReminderCommand(command);
+}
+
+/**
+ * Schedule a reminder (wrapper around setReminder)
+ */
+export async function scheduleReminder(options: ReminderOptions): Promise<string> {
+  console.log('[Reminders] scheduleReminder called:', options);
+  return await setReminder(options);
+}
+
+/**
+ * Format reminders for speech output
+ */
+export function formatRemindersForSpeech(reminders: any[]): string {
+  if (reminders.length === 0) {
+    return "You have no upcoming reminders, sir.";
+  }
+  
+  if (reminders.length === 1) {
+    const r = reminders[0];
+    const time = new Date(r.fire_at).toLocaleString('en-GB', {
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true,
+      month: 'short',
+      day: 'numeric'
+    });
+    return `You have one reminder: ${r.title} at ${time}.`;
+  }
+  
+  const count = reminders.length;
+  const first = reminders[0];
+  const firstTime = new Date(first.fire_at).toLocaleString('en-GB', {
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true,
+    month: 'short',
+    day: 'numeric'
+  });
+  
+  return `You have ${count} reminders. The next one is: ${first.title} at ${firstTime}.`;
+}
+

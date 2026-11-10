@@ -205,14 +205,19 @@ export async function ask(
   
   // Step 6: Call Multi-AI Provider System
   console.log('[AI] Calling AI provider:', currentProvider);
+  console.log('[AI] Messages in history:', messages.length);
+  
   try {
     // Add context if available
     const messagesWithContext = context 
       ? [...messages, { role: 'system' as const, content: `[Context]\n${context}` }]
       : messages;
     
+    console.log('[AI] Calling callAI() with provider:', currentProvider);
     const response = await callAI(messagesWithContext, currentProvider);
-    console.log('[AI] AI response received from:', response.provider);
+    console.log('[AI] ✅ AI response received from:', response.provider);
+    console.log('[AI] Response length:', response.text.length);
+    console.log('[AI] Response preview:', response.text.substring(0, 100));
     
     // Step 7: Check if AI wants to send a message
     if (response.text.includes('[SEND_MESSAGE]')) {
@@ -224,9 +229,17 @@ export async function ask(
     
     return response;
   } catch (e: any) {
-    console.error('[AI] All AI providers failed:', e);
+    console.error('[AI] ❌ All AI providers failed!');
+    console.error('[AI] Error:', e.message || e);
+    console.error('[AI] Stack:', e.stack);
+    
+    // Return a user-friendly error with details
     return { 
-      text: "I apologize, sir. I'm experiencing technical difficulties connecting to my AI systems. " + e.message,
+      text: "I apologize, sir. I'm having trouble connecting to my AI systems. Please check:\n" +
+            "1. Internet connection is working\n" +
+            "2. API keys are configured correctly\n" +
+            "3. No firewall blocking the connection\n\n" +
+            "Error: " + (e.message || 'Unknown error'),
       provider: currentProvider,
       offline: true 
     };

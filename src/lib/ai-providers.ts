@@ -81,8 +81,12 @@ Examples:
  */
 async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
   console.log('[Gemini] Starting API call...');
+  console.log('[Gemini] API Key:', API_KEYS.gemini ? '✓ Present' : '✗ Missing');
+  console.log('[Gemini] Messages count:', messages.length);
   
   const fullPrompt = buildPrompt(messages);
+  console.log('[Gemini] Prompt length:', fullPrompt.length);
+  
   const requestBody = {
     contents: [{
       parts: [{ text: fullPrompt }]
@@ -98,6 +102,8 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
   
   try {
     const apiUrl = API_URLS.gemini + '?key=' + API_KEYS.gemini;
+    console.log('[Gemini] Calling API:', API_URLS.gemini);
+    
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,22 +113,29 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
 
     clearTimeout(timeoutId);
     
+    console.log('[Gemini] Response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[Gemini] API error response:', errorText);
       throw new Error('Gemini API error: ' + response.status + ' - ' + errorText);
     }
 
     const data = await response.json();
+    console.log('[Gemini] Response data keys:', Object.keys(data));
+    
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
+      console.error('[Gemini] No text in response:', JSON.stringify(data).substring(0, 200));
       throw new Error('No response from Gemini API');
     }
 
-    console.log('[Gemini] Success!');
+    console.log('[Gemini] ✅ Success! Response length:', text.length);
     return text.trim();
   } catch (error: any) {
-    console.error('[Gemini] Error:', error);
+    console.error('[Gemini] ❌ Error:', error.message || error);
+    console.error('[Gemini] Error stack:', error.stack);
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -133,16 +146,32 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
  * Call Claude API (Anthropic)
  */
 async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
+  console.log('[Claude] Starting API call...');
+  console.log('[Claude] API Key:', API_KEYS.claude ? `✓ Present (${API_KEYS.claude.substring(0, 15)}...)` : '✗ Missing');
+  
   if (!API_KEYS.claude) {
     throw new Error('Claude API key not configured');
   }
   
-  console.log('[Claude] Starting API call...');
+  console.log('[Claude] Messages count:', messages.length);
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   
   try {
+    const requestBody = {
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      messages: messages.filter(m => m.role !== 'system').map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      })),
+    };
+    
+    console.log('[Claude] Request body:', JSON.stringify(requestBody).substring(0, 200));
+    console.log('[Claude] Calling API:', API_URLS.claude);
+    
     const response = await fetch(API_URLS.claude, {
       method: 'POST',
       headers: {
@@ -150,36 +179,35 @@ async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
         'x-api-key': API_KEYS.claude,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2048,
-        system: SYSTEM_PROMPT,
-        messages: messages.filter(m => m.role !== 'system').map(m => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content,
-        })),
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
     
+    console.log('[Claude] Response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[Claude] API error response:', errorText);
       throw new Error('Claude API error: ' + response.status + ' - ' + errorText);
     }
 
     const data = await response.json();
+    console.log('[Claude] Response data keys:', Object.keys(data));
+    
     const text = data.content?.[0]?.text;
     
     if (!text) {
+      console.error('[Claude] No text in response:', JSON.stringify(data).substring(0, 200));
       throw new Error('No response from Claude API');
     }
 
-    console.log('[Claude] Success!');
+    console.log('[Claude] ✅ Success! Response length:', text.length);
     return text.trim();
   } catch (error: any) {
-    console.error('[Claude] Error:', error);
+    console.error('[Claude] ❌ Error:', error.message || error);
+    console.error('[Claude] Error stack:', error.stack);
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -252,32 +280,49 @@ export async function callAI(
   messages: AIMessage[],
   provider: AIProvider = 'auto'
 ): Promise<AIResponse> {
+  console.log('[AI] ========================================');
+  console.log('[AI] callAI() invoked');
   console.log('[AI] Provider:', provider);
+  console.log('[AI] Messages:', messages.length);
+  console.log('[AI] API Keys status:');
+  console.log('[AI]   - Gemini:', API_KEYS.gemini ? '✓' : '✗');
+  console.log('[AI]   - Claude:', API_KEYS.claude ? '✓' : '✗');
+  console.log('[AI]   - OpenAI:', API_KEYS.openai ? '✓' : '✗');
+  console.log('[AI] ========================================');
   
   // Auto mode: try providers in order of preference
   if (provider === 'auto') {
     const providers: AIProvider[] = ['gemini', 'claude', 'openai'];
+    const errors: string[] = [];
     
     for (const p of providers) {
       try {
-        console.log('[AI] Trying provider:', p);
+        console.log('[AI] 🔄 Trying provider:', p);
         const text = await callProviderAPI(p, messages);
+        console.log('[AI] ✅ SUCCESS with provider:', p);
         return { text, provider: p, offline: false };
-      } catch (error) {
-        console.error('[AI] Provider', p, 'failed:', error);
+      } catch (error: any) {
+        const errorMsg = error.message || String(error);
+        console.error('[AI] ❌ Provider', p, 'failed:', errorMsg);
+        errors.push(`${p}: ${errorMsg}`);
         // Try next provider
       }
     }
     
     // All providers failed
-    throw new Error('All AI providers failed. Check your internet connection and API keys.');
+    console.error('[AI] ❌ ALL PROVIDERS FAILED!');
+    console.error('[AI] Errors:', errors);
+    throw new Error('All AI providers failed:\n' + errors.join('\n'));
   }
   
   // Specific provider requested
+  console.log('[AI] Using specific provider:', provider);
   try {
     const text = await callProviderAPI(provider, messages);
+    console.log('[AI] ✅ SUCCESS with provider:', provider);
     return { text, provider, offline: false };
   } catch (error: any) {
+    console.error('[AI] ❌ Provider failed:', error.message || error);
     throw new Error(`${provider} API failed: ${error.message}`);
   }
 }
