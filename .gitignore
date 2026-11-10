@@ -1,42 +1,41 @@
-# Node
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
 node_modules/
-npm-debug.log*
 
 # Expo
 .expo/
 dist/
 web-build/
-expo-env.d.ts
 
-# Android build outputs
-android/build/
-android/app/build/
-android/.gradle/
-android/local.properties
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
 
-# iOS
-ios/build/
-ios/Pods/
-ios/.xcode.env.local
+# Metro
+.metro-health-check*
 
-# Environment & secrets
-.env
-.env.local
-.env*.local
-*.keystore
-!android/app/debug.keystore
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
-# OS
+# macOS
 .DS_Store
-Thumbs.db
+*.pem
 
-# Editor
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
+# local env files
+.env*.local
 
-# TypeScript
+# typescript
 *.tsbuildinfo
+
+# API Keys - NEVER COMMIT THESE!
+*.local.ts
+.env
+**/*api-keys.local.ts
+src/config/init-api-keys.local.ts
