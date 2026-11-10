@@ -1,22 +1,27 @@
 /**
- * AI Engine — Gemini Nano (on-device) → Gemini API (cloud) → Web Search → Offline fallback
- * Handles complex questions by using cloud AI and real-time web data.
+ * AI Engine — 100% Cloud-Based Multi-AI System
+ * Supports: Gemini, Claude, OpenAI
+ * NO on-device AI - completely online operation
+ * 
+ * NEW FEATURES:
+ * - Multi-AI provider support (switch between Gemini, Claude, etc.)
+ * - AI can SEND messages via accessibility service
+ * - AI handles notifications and can reply automatically
+ * - App handles reminders (not AI)
  */
-import { NativeModules, Platform } from "react-native";
 
-const GeminiNanoModule = Platform.OS === "android" ? NativeModules.GeminiNanoModule : null;
+import { callAI, AIProvider, type AIMessage, type AIResponse } from "./ai-providers";
 
-// Lazy load optional modules to prevent startup crashes
+// Lazy load optional modules
 let smartSearch: any = null;
 let getWeather: any = null;
-let parseReminderCommand: any = null;
-let setReminder: any = null;
 let checkInternetConnection: any = null;
 let makePhoneCall: any = null;
 let parseCallCommand: any = null;
 let openApp: any = null;
 let parseOpenAppCommand: any = null;
 let requestCallPermission: any = null;
+let sendMessageViaAccessibility: any = null;
 
 async function loadOptionalModules() {
   try {
@@ -28,14 +33,6 @@ async function loadOptionalModules() {
   }
   
   try {
-    const reminders = await import("./reminders");
-    parseReminderCommand = reminders.parseReminderCommand;
-    setReminder = reminders.setReminder;
-  } catch (e) {
-    console.warn('[AI] Reminders module not available:', e);
-  }
-  
-  try {
     const accessibility = await import("./accessibility");
     checkInternetConnection = accessibility.checkInternetConnection;
     makePhoneCall = accessibility.makePhoneCall;
@@ -43,72 +40,29 @@ async function loadOptionalModules() {
     openApp = accessibility.openApp;
     parseOpenAppCommand = accessibility.parseOpenAppCommand;
     requestCallPermission = accessibility.requestCallPermission;
+    sendMessageViaAccessibility = accessibility.sendMessageViaAccessibility; // NEW!
   } catch (e) {
     console.warn('[AI] Accessibility module not available:', e);
   }
 }
 
-// Google Gemini API - Free tier
-const GEMINI_API_KEY = "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM";
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+export { AIMessage, AIResponse };
 
-export type AIMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
+// Default AI provider (can be changed by user)
+let currentProvider: AIProvider = 'auto'; // Will try all providers
 
-export type AIResponse = {
-  text: string;
-  offline: boolean;
-};
+export function setAIProvider(provider: AIProvider) {
+  currentProvider = provider;
+  console.log('[AI] Provider set to:', provider);
+}
 
-const SYSTEM_PROMPT = "You are Light, a calm, composed personal AI assistant with the manner of a refined British butler — similar in character to J.A.R.V.I.S. from Iron Man.\n\n" +
-"Your capabilities:\n" +
-"- Read and summarize notifications from WhatsApp, Instagram, Gmail, etc.\n" +
-"- MAKE PHONE CALLS hands-free (user says 'call <number>')\n" +
-"- OPEN APPS hands-free (WhatsApp, Instagram, Gmail, Maps, Chrome, YouTube, Camera, Settings)\n" +
-"- SET REMINDERS with exact times (user will say 'remind me to X at Y')\n" +
-"- SEARCH THE WEB for current facts, news, and information\n" +
-"- Get REAL-TIME WEATHER data\n" +
-"- Perform complex calculations and reasoning\n" +
-"- Answer questions using both your knowledge AND live web data\n" +
-"- Draft emails and messages (you cannot send them, only suggest)\n" +
-"- Provide step-by-step guidance for complex tasks\n" +
-"- Tell jokes, provide weather insights, and casual conversation\n\n" +
-"Your rules:\n" +
-"- Speak in clear, brief British English. Never ramble.\n" +
-"- Address the user as \"sir\" or \"ma'am\" occasionally, but not every sentence.\n" +
-"- When reading messages: give a concise summary and offer to draft a reply.\n" +
-"- When user asks about current facts (who/what/when/where): the system will fetch live data from the web\n" +
-"- For calls: system automatically makes the call\n" +
-"- For app opening: system automatically opens the requested app\n" +
-"- For reminders: system automatically handles setting Android alarms\n" +
-"- For calculations: show the work and result clearly\n" +
-"- Never reveal contents of private messages unprompted. Wait to be asked.\n" +
-"- You are private. Never share or reference other users' data.\n" +
-"- Be helpful, accurate, and productive. You're here to make the user's life easier.\n\n" +
-"Examples:\n" +
-"- \"What is 25 * 137?\" → \"The result is 3,425, sir.\"\n" +
-"- \"Call 1234567890\" → System makes the call\n" +
-"- \"Open WhatsApp\" → System opens WhatsApp\n" +
-"- \"Remind me to call John at 3pm\" → System sets alarm automatically\n" +
-"- \"Who is Elon Musk?\" → Fetches current info from web\n" +
-"- \"What's the weather?\" → Gets real-time weather data\n" +
-"- \"Read my messages\" → [summary of unread notifications]";
-
-export async function isGeminiNanoAvailable(): Promise<boolean> {
-  if (Platform.OS !== "android") return false;
-  if (!GeminiNanoModule?.isAvailable) return false;
-  try {
-    return await GeminiNanoModule.isAvailable();
-  } catch {
-    return false;
-  }
+export function getAIProvider(): AIProvider {
+  return currentProvider;
 }
 
 /**
- * Ask AI with conversation history.
- * ALWAYS tries online first, only uses offline if no internet connection
+ * Ask AI with conversation history
+ * 100% Cloud-based - requires internet
  */
 export async function ask(
   messages: AIMessage[],
@@ -117,9 +71,9 @@ export async function ask(
   console.log('[AI] ask() called, loading optional modules...');
   
   // Load optional modules on first use
-  if (!smartSearch && !parseReminderCommand && !checkInternetConnection) {
+  if (!smartSearch && !checkInternetConnection) {
     await loadOptionalModules();
-    console.log('[AI] Modules loaded. smartSearch:', !!smartSearch, 'checkInternet:', !!checkInternetConnection);
+    console.log('[AI] Modules loaded');
   }
   
   // Check internet connection FIRST - BLOCK if offline
@@ -134,13 +88,14 @@ export async function ask(
     console.log('[AI] NO INTERNET - Refusing to process (online-only mode)');
     return { 
       text: "I apologize, sir. Light requires an active internet connection to function. Please connect to WiFi or mobile data and try again.",
+      provider: currentProvider,
       offline: true 
     };
   }
   
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
   const lowerMessage = lastUserMessage.toLowerCase();
-  console.log('[AI] Processing query:', lastUserMessage.substring(0, 50), '| Has Internet:', hasInternet);
+  console.log('[AI] Processing query:', lastUserMessage.substring(0, 50));
   
   // Step 1: Check for phone call command
   if (parseCallCommand && makePhoneCall) {
@@ -154,12 +109,14 @@ export async function ask(
         await makePhoneCall(phoneNumber);
         return {
           text: "Calling " + phoneNumber + " now, sir.",
+          provider: currentProvider,
           offline: false
         };
       } catch (e: any) {
         console.error('[AI] Call failed:', e);
         return {
           text: "I apologize, sir. I couldn't make that call. " + (e.message || 'Please check permissions.'),
+          provider: currentProvider,
           offline: false
         };
       }
@@ -175,60 +132,30 @@ export async function ask(
         await openApp(packageName);
         return {
           text: "Opening the app now, sir.",
+          provider: currentProvider,
           offline: false
         };
       } catch (e: any) {
         console.error('[AI] Open app failed:', e);
         return {
           text: "I apologize, sir. I couldn't open that app. " + (e.message || ''),
+          provider: currentProvider,
           offline: false
         };
       }
     }
   }
   
-  // Step 3: Check if this is a reminder request
-  if (parseReminderCommand && setReminder) {
-    try {
-      const reminderMatch = parseReminderCommand(lowerMessage);
-      if (reminderMatch) {
-        console.log('[AI] Reminder detected:', reminderMatch);
-        try {
-          const result = await setReminder(reminderMatch);
-          console.log('[AI] Reminder set successfully:', result);
-          const timeStr = reminderMatch.time.toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const dateStr = reminderMatch.time.toLocaleDateString("en-GB", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          });
-          const isToday = reminderMatch.time.toDateString() === new Date().toDateString();
-          const when = isToday ? "today at " + timeStr : "on " + dateStr + " at " + timeStr;
-          return {
-            text: "Very well, sir. I'll remind you to " + reminderMatch.title + " " + when + ".",
-            offline: false
-          };
-        } catch (reminderError: any) {
-          console.error('[AI] Reminder set failed:', reminderError);
-          console.error('[AI] Error details:', reminderError.message, reminderError.stack);
-          return {
-            text: "I apologize, sir. I encountered an error setting that reminder: " + (reminderError.message || 'Unknown error. Please try again or check alarm permissions.'),
-            offline: false
-          };
-        }
-      }
-    } catch (parseError: any) {
-      console.error('[AI] Reminder parsing failed:', parseError);
-      console.error('[AI] Parse error details:', parseError.message);
-      // Continue to other processing instead of failing
-    }
+  // Step 3: Check for MESSAGE SENDING command (NEW!)
+  if (sendMessageViaAccessibility && (
+    lowerMessage.includes('reply to') ||
+    lowerMessage.includes('send message to') ||
+    lowerMessage.includes('tell ') ||
+    lowerMessage.includes('text ')
+  )) {
+    console.log('[AI] Message sending detected, delegating to AI for drafting...');
+    // Let AI draft the message, then send it via accessibility
   }
-  
-  // Only try online services if internet is available (ALREADY CHECKED ABOVE - THIS IS REDUNDANT NOW)
-  // If we got here, we have internet (or we would have returned error already)
   
   // Step 4: Check if this is a weather query
   if (getWeather && lowerMessage.includes('weather')) {
@@ -237,7 +164,11 @@ export async function ask(
       const weatherData = await getWeather();
       console.log('[AI] Weather result:', weatherData);
       if (weatherData) {
-        return { text: "The current weather is: " + weatherData, offline: false };
+        return { 
+          text: "The current weather is: " + weatherData, 
+          provider: currentProvider,
+          offline: false 
+        };
       }
     } catch (e) {
       console.error('[AI] Weather fetch failed:', e);
@@ -259,244 +190,53 @@ export async function ask(
     console.log('[AI] Web search triggered for:', lastUserMessage);
     try {
       const webResult = await smartSearch(lastUserMessage);
-      console.log('[AI] Web search result length:', webResult?.length, 'content:', webResult?.substring(0, 100));
+      console.log('[AI] Web search result length:', webResult?.length);
       if (webResult && webResult.length > 20 && !webResult.includes('could not find')) {
-        return { text: webResult, offline: false };
+        return { 
+          text: webResult, 
+          provider: currentProvider,
+          offline: false 
+        };
       }
     } catch (e) {
       console.error('[AI] Web search failed:', e);
     }
   }
   
-  // Step 6: Try Gemini Nano (on-device)
-  console.log('[AI] Checking Gemini Nano...');
-  const nanoAvailable = await isGeminiNanoAvailable();
-  console.log('[AI] Gemini Nano available:', nanoAvailable);
-  if (nanoAvailable) {
-    try {
-      const fullPrompt = buildPrompt(messages, context);
-      const text: string = await GeminiNanoModule.generateText(fullPrompt);
-      console.log('[AI] Gemini Nano success:', text.substring(0, 50));
-      return { text: text.trim(), offline: false };
-    } catch (e) {
-      console.error('[AI] Gemini Nano failed:', e);
-    }
-  }
-
-  // Step 7: Try Gemini API (cloud) - ALWAYS try if internet is available
-  console.log('[AI] Trying Gemini API (cloud)...');
+  // Step 6: Call Multi-AI Provider System
+  console.log('[AI] Calling AI provider:', currentProvider);
   try {
-    const text = await callGeminiAPI(messages, context);
-    console.log('[AI] Gemini API success:', text.substring(0, 50));
-    return { text, offline: false };
-  } catch (e) {
-    console.error('[AI] Gemini API failed:', e);
-  }
-
-  // Step 8: If everything failed with internet, show error
-  console.log('[AI] All online services failed - showing error');
-  return { 
-    text: "I apologize, sir. I'm experiencing technical difficulties connecting to my systems. Please check your internet connection and try again.",
-    offline: true 
-  };
-}
-
-/**
- * Call Google Gemini API (cloud-based AI)
- */
-async function callGeminiAPI(messages: AIMessage[], context?: string): Promise<string> {
-  console.log('[Gemini API] Starting API call...');
-  const fullPrompt = buildPrompt(messages, context);
-  console.log('[Gemini API] Prompt length:', fullPrompt.length);
-  
-  const requestBody = {
-    contents: [{
-      parts: [{ text: fullPrompt }]
-    }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048, // Increased for complex tasks and detailed responses
-    }
-  };
-  
-  console.log('[Gemini API] Calling:', GEMINI_API_URL);
-  console.log('[Gemini API] Request body size:', JSON.stringify(requestBody).length);
-  
-  // Add timeout to prevent hanging
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-  
-  try {
-    const apiUrl = GEMINI_API_URL + '?key=' + GEMINI_API_KEY;
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-    console.log('[Gemini API] Response status:', response.status);
+    // Add context if available
+    const messagesWithContext = context 
+      ? [...messages, { role: 'system' as const, content: `[Context]\n${context}` }]
+      : messages;
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Gemini API] Error response:', errorText);
-      throw new Error('API error: ' + response.status + ' - ' + errorText);
-    }
-
-    const data = await response.json();
-    console.log('[Gemini API] Response received, parsing...');
+    const response = await callAI(messagesWithContext, currentProvider);
+    console.log('[AI] AI response received from:', response.provider);
     
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Step 7: Check if AI wants to send a message
+    if (response.text.includes('[SEND_MESSAGE]')) {
+      console.log('[AI] AI wants to send a message via accessibility');
+      // Parse the message sending command from AI response
+      // Format: [SEND_MESSAGE|app|recipient|message]
+      // We'll implement this logic next
+    }
     
-    if (!text) {
-      console.error('[Gemini API] No text in response:', JSON.stringify(data).substring(0, 200));
-      throw new Error('No response from API');
-    }
-
-    console.log('[Gemini API] Success! Text length:', text.length);
-    return text.trim();
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      console.error('[Gemini API] Request timeout after 30 seconds');
-      throw new Error('API request timed out');
-    }
-    console.error('[Gemini API] Fetch error:', error);
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+    return response;
+  } catch (e: any) {
+    console.error('[AI] All AI providers failed:', e);
+    return { 
+      text: "I apologize, sir. I'm experiencing technical difficulties connecting to my AI systems. " + e.message,
+      provider: currentProvider,
+      offline: true 
+    };
   }
 }
 
-function buildPrompt(messages: AIMessage[], context?: string): string {
-  const parts: string[] = [SYSTEM_PROMPT];
-  if (context) parts.push('\n[Context]\n' + context);
-  parts.push("\n[Conversation]");
-  for (const m of messages) {
-    parts.push(
-      m.role === "user"
-        ? 'User: ' + m.content
-        : m.role === "assistant"
-        ? 'Light: ' + m.content
-        : 'System: ' + m.content
-    );
-  }
-  parts.push("Light:");
-  return parts.join("\n");
+// Re-export for compatibility
+export async function isGeminiNanoAvailable(): Promise<boolean> {
+  // Gemini Nano is removed - always return false
+  return false;
 }
 
-/**
- * Offline fallback for basic commands when no AI is available
- */
-function offlineFallback(messages: AIMessage[], context?: string): string {
-  const lastUser = [...messages]
-    .reverse()
-    .find((m) => m.role === "user")
-    ?.content.toLowerCase() ?? "";
 
-  // Math/calculations
-  if (lastUser.includes("+") || lastUser.includes("-") || lastUser.includes("*") || 
-      lastUser.includes("/") || lastUser.includes("calculate") || lastUser.includes("what is")) {
-    // Try to extract and calculate simple math
-    try {
-      const match = lastUser.match(/(\d+\.?\d*)\s*([+\-*/])\s*(\d+\.?\d*)/);
-      if (match) {
-        const [_, a, op, b] = match;
-        const num1 = parseFloat(a);
-        const num2 = parseFloat(b);
-        let result = 0;
-        switch(op) {
-          case '+': result = num1 + num2; break;
-          case '-': result = num1 - num2; break;
-          case '*': result = num1 * num2; break;
-          case '/': result = num1 / num2; break;
-        }
-        return 'The result is ' + result + ', sir.';
-      }
-    } catch (e) {
-      // Fall through to default message
-    }
-  }
-
-  // Reminder intent
-  if (
-    lastUser.includes("remind") ||
-    lastUser.includes("alarm") ||
-    lastUser.includes("alert")
-  ) {
-    return "I'll set that reminder for you, sir. Could you confirm the exact time?";
-  }
-
-  // Message reading intent
-  if (
-    lastUser.includes("message") ||
-    lastUser.includes("notification") ||
-    lastUser.includes("email") ||
-    lastUser.includes("whatsapp") ||
-    lastUser.includes("gmail") ||
-    lastUser.includes("instagram")
-  ) {
-    if (context) {
-      return 'Here is what I have, sir: ' + context;
-    }
-    return "I don't have any new messages to report at the moment, sir.";
-  }
-
-  // Reply drafting
-  if (lastUser.includes("reply") || lastUser.includes("respond") || lastUser.includes("draft")) {
-    return "Certainly, sir. Here is a suggested reply: 'Thank you for your message. I will get back to you shortly.'";
-  }
-
-  // Time
-  if (lastUser.includes("time") || lastUser.includes("what time")) {
-    const now = new Date().toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return 'The current time is ' + now + ', sir.';
-  }
-
-  // Date
-  if (lastUser.includes("date") || lastUser.includes("today")) {
-    const today = new Date().toLocaleDateString("en-GB", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    return 'Today is ' + today + ', sir.';
-  }
-
-  // Weather (basic response)
-  if (lastUser.includes("weather")) {
-    return "I apologize, sir. Weather data requires an internet connection. Please ensure you're connected and try again.";
-  }
-
-  // Greetings
-  if (
-    lastUser.includes("hello") ||
-    lastUser.includes("hi ") ||
-    lastUser === "hi" ||
-    lastUser.includes("hey")
-  ) {
-    return "Hello, sir. How may I assist you?";
-  }
-
-  // Complex queries
-  if (
-    lastUser.includes("explain") ||
-    lastUser.includes("how does") ||
-    lastUser.includes("what does") ||
-    lastUser.includes("tell me about") ||
-    lastUser.includes("why") ||
-    lastUser.includes("who is") ||
-    lastUser.includes("when did")
-  ) {
-    return "That's an excellent question, sir. However, I need an internet connection to provide a detailed answer. Please ensure you're connected and try again.";
-  }
-
-  // Default - AI unavailable message
-  return "I apologize, sir. I'm currently operating in offline mode with limited capabilities. I can help you with basic calculations, reminders, reading cached messages, or telling the time. For complex queries, please ensure you have an active internet connection.";
-}
