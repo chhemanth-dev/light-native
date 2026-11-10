@@ -158,19 +158,19 @@ export function formatMessagesForSpeech(
  */
 export function formatReminderConfirmation(
   title: string,
-  fireAt: Date
+  time: Date
 ): string {
-  const time = fireAt.toLocaleTimeString("en-GB", {
+  const timeStr = time.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const date = fireAt.toLocaleDateString("en-GB", {
+  const date = time.toLocaleDateString("en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
-  const isToday = fireAt.toDateString() === new Date().toDateString();
+  const isToday = time.toDateString() === new Date().toDateString();
   return isToday
-    ? `Very well, sir. I'll remind you about "${title}" at ${time} today.`
-    : `Understood. I'll remind you about "${title}" on ${date} at ${time}.`;
+    ? `Very well, sir. I'll remind you about "${title}" at ${timeStr} today.`
+    : `Understood. I'll remind you about "${title}" on ${date} at ${timeStr}.`;
 }

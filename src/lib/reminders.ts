@@ -191,11 +191,30 @@ export function parseReminderFromSpeech(command: string): ReminderOptions | null
 }
 
 /**
- * Schedule a reminder (wrapper around setReminder)
+ * Schedule a reminder (wrapper around setReminder + save to DB)
  */
 export async function scheduleReminder(options: ReminderOptions): Promise<string> {
   console.log('[Reminders] scheduleReminder called:', options);
-  return await setReminder(options);
+  
+  // Set the native Android alarm/notification
+  const result = await setReminder(options);
+  
+  // Also save to database so it shows in reminders list
+  try {
+    const { saveReminder } = await import('./db');
+    await saveReminder({
+      title: options.title,
+      body: '', // No body for voice reminders
+      fire_at: options.time.getTime(),
+      repeat_interval: null,
+    });
+    console.log('[Reminders] Saved to database');
+  } catch (dbError) {
+    console.warn('[Reminders] Could not save to database:', dbError);
+    // Continue anyway - native alarm is set
+  }
+  
+  return result;
 }
 
 /**

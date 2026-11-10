@@ -11,7 +11,15 @@ import { getDb } from "../src/lib/db";
 import { useAppStore } from "../src/store/appStore";
 import { router } from "expo-router";
 import { initializeNotifications } from "../src/lib/notificationSetup";
-import { initializeMyAPIKeys } from "../src/config/init-api-keys.local";
+
+// Optional: Load API keys if local file exists (git-ignored for security)
+let initializeMyAPIKeys: (() => void) | null = null;
+try {
+  const apiKeysModule = require("../src/config/init-api-keys.local");
+  initializeMyAPIKeys = apiKeysModule.initializeMyAPIKeys;
+} catch (e) {
+  console.warn('[Setup] init-api-keys.local.ts not found - API keys will need to be set manually');
+}
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -22,8 +30,10 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        // Initialize API keys FIRST (Claude, OpenAI, etc.)
-        initializeMyAPIKeys();
+        // Initialize API keys FIRST (Claude, OpenAI, etc.) - if available
+        if (initializeMyAPIKeys) {
+          initializeMyAPIKeys();
+        }
         
         // Initialize notifications (channels, permissions, handler)
         await initializeNotifications();
