@@ -23,7 +23,7 @@ export type AIResponse = {
 
 // Load from environment or use empty defaults
 const API_KEYS = {
-  gemini: "AIzaSyBCH8vQ9X7hKqR2mFZJxGN4pL3tYwDsEuM", // Public key (safe to commit)
+  gemini: "", // Get from https://makersuite.google.com/app/apikey (FREE)
   claude: "", // Set via setAPIKey() or environment variable
   openai: "", // Set via setAPIKey() or environment variable
 };
@@ -285,9 +285,16 @@ export async function callAI(
   console.log('[AI] Provider:', provider);
   console.log('[AI] Messages:', messages.length);
   console.log('[AI] API Keys status:');
-  console.log('[AI]   - Gemini:', API_KEYS.gemini ? '✓' : '✗');
+  console.log('[AI]   - Gemini:', API_KEYS.gemini ? '✓' : '✗ MISSING');
   console.log('[AI]   - Claude:', API_KEYS.claude ? '✓' : '✗');
   console.log('[AI]   - OpenAI:', API_KEYS.openai ? '✓' : '✗');
+  
+  // Check if ANY key is configured
+  if (!API_KEYS.gemini && !API_KEYS.claude && !API_KEYS.openai) {
+    console.error('[AI] ❌ NO API KEYS CONFIGURED!');
+    throw new Error('No API keys configured. Please set at least one API key in init-api-keys.local.ts');
+  }
+  
   console.log('[AI] ========================================');
   
   // Auto mode: try providers in order of preference
@@ -296,6 +303,12 @@ export async function callAI(
     const errors: string[] = [];
     
     for (const p of providers) {
+      // Skip if key not configured
+      if (!isProviderConfigured(p as Exclude<AIProvider, 'auto'>)) {
+        console.log('[AI] ⏭️  Skipping', p, '- no API key configured');
+        continue;
+      }
+      
       try {
         console.log('[AI] 🔄 Trying provider:', p);
         const text = await callProviderAPI(p, messages);
@@ -317,6 +330,12 @@ export async function callAI(
   
   // Specific provider requested
   console.log('[AI] Using specific provider:', provider);
+  
+  // Check if provider is configured
+  if (!isProviderConfigured(provider as Exclude<AIProvider, 'auto'>)) {
+    throw new Error(`${provider} API key not configured. Please add it to init-api-keys.local.ts`);
+  }
+  
   try {
     const text = await callProviderAPI(provider, messages);
     console.log('[AI] ✅ SUCCESS with provider:', provider);
