@@ -55,7 +55,7 @@ async function loadOptionalModules() {
 export { AIMessage, AIResponse };
 
 // Default AI provider (can be changed by user)
-let currentProvider: AIProvider = 'auto'; // Will try all providers
+let currentProvider: AIProvider = 'claude'; // Use Claude since user has valid key
 
 export function setAIProvider(provider: AIProvider) {
   currentProvider = provider;
