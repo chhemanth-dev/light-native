@@ -20,6 +20,7 @@ import { saveAPIKey, loadAPIKey } from '../src/config/api-keys';
 
 export default function AISettingsScreen() {
   const [currentProvider, setCurrentProvider] = useState<AIProvider>(getAIProvider());
+  const [geminiKey, setGeminiKey] = useState('');
   const [claudeKey, setClaudeKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [saved, setSaved] = useState(false);
@@ -29,15 +30,21 @@ export default function AISettingsScreen() {
   }, []);
 
   async function loadKeys() {
+    const gemini = await loadAPIKey('gemini');
     const claude = await loadAPIKey('claude');
     const openai = await loadAPIKey('openai');
     
+    if (gemini) setGeminiKey(gemini);
     if (claude) setClaudeKey(claude);
     if (openai) setOpenaiKey(openai);
   }
 
   async function handleSaveKeys() {
     try {
+      if (geminiKey) {
+        await saveAPIKey('gemini', geminiKey);
+        setAPIKey('gemini', geminiKey);
+      }
       if (claudeKey) {
         await saveAPIKey('claude', claudeKey);
         setAPIKey('claude', claudeKey);
@@ -50,7 +57,7 @@ export default function AISettingsScreen() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       
-      Alert.alert('Success', 'API keys saved securely');
+      Alert.alert('Success', 'API keys saved securely! They will be used immediately.');
     } catch (error) {
       Alert.alert('Error', 'Failed to save API keys');
     }
@@ -149,7 +156,22 @@ export default function AISettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>API Keys</Text>
           <Text style={styles.sectionDesc}>
-            Add your own API keys for Claude and OpenAI
+            Add your API keys here. When balance runs out, just update the key - no rebuild needed!
+          </Text>
+
+          <Text style={styles.label}>Gemini API Key (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={geminiKey}
+            onChangeText={setGeminiKey}
+            placeholder="AIzaSy..."
+            placeholderTextColor="#64748B"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={styles.hint}>
+            Get your key at: makersuite.google.com/app/apikey
           </Text>
 
           <Text style={styles.label}>Claude API Key (Optional)</Text>
@@ -167,12 +189,12 @@ export default function AISettingsScreen() {
             Get your key at: console.anthropic.com
           </Text>
 
-          <Text style={styles.label}>OpenAI API Key (Optional)</Text>
+          <Text style={styles.label}>OpenAI API Key (Recommended)</Text>
           <TextInput
             style={styles.input}
             value={openaiKey}
             onChangeText={setOpenaiKey}
-            placeholder="sk-..."
+            placeholder="sk-proj-... or sk-..."
             placeholderTextColor="#64748B"
             secureTextEntry
             autoCapitalize="none"
@@ -192,7 +214,8 @@ export default function AISettingsScreen() {
           </Pressable>
 
           <Text style={styles.note}>
-            🔒 Keys are stored securely on your device and never leave your phone
+            🔒 Keys are encrypted and stored on your device only{'\n'}
+            💡 You can update keys anytime without rebuilding the app!
           </Text>
         </View>
 

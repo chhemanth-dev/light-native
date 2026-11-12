@@ -161,6 +161,11 @@ export default function SettingsScreen() {
         <Section title="AI ENGINE" />
         <View style={styles.group}>
           <Row
+            label="AI Provider & API Keys"
+            onPress={() => router.push('/ai-settings')}
+            value="Manage →"
+          />
+          <Row
             label="Gemini Nano (on-device)"
             badge={
               geminiAvailable
@@ -171,7 +176,7 @@ export default function SettingsScreen() {
           {!geminiAvailable && (
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                Gemini Nano requires Android 14+ with AICore. Using offline rule engine as fallback.
+                Gemini Nano requires Android 14+ with AICore. Using cloud AI as primary.
               </Text>
             </View>
           )}

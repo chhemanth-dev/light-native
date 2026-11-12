@@ -18,12 +18,13 @@ export default function TabLayout() {
           backgroundColor: "#07090F",
           borderTopColor: "#0F172A",
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 6,
+          height: 70,
+          paddingBottom: 12,
+          paddingTop: 8,
         },
         tabBarActiveTintColor: "#3B82F6",
         tabBarInactiveTintColor: "#334155",
-        tabBarLabelStyle: { fontSize: 10, letterSpacing: 0.5 },
+        tabBarLabelStyle: { fontSize: 10, letterSpacing: 0.5, marginTop: 4 },
       }}
     >
       <Tabs.Screen

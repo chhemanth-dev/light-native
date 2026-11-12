@@ -13,7 +13,7 @@ import { router } from "expo-router";
 import { initializeNotifications } from "../src/lib/notificationSetup";
 
 // Optional: Load API keys if local file exists (git-ignored for security)
-let initializeMyAPIKeys: (() => void) | null = null;
+let initializeMyAPIKeys: (() => Promise<void>) | null = null;
 try {
   const apiKeysModule = require("../src/config/init-api-keys.local");
   initializeMyAPIKeys = apiKeysModule.initializeMyAPIKeys;
@@ -32,7 +32,7 @@ export default function RootLayout() {
       try {
         // Initialize API keys FIRST (Claude, OpenAI, etc.) - if available
         if (initializeMyAPIKeys) {
-          initializeMyAPIKeys();
+          await initializeMyAPIKeys();
         }
         
         // Initialize notifications (channels, permissions, handler)

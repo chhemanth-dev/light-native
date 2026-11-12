@@ -13,6 +13,7 @@ import { Platform } from 'react-native';
 
 // Secure key storage keys
 const STORAGE_KEYS = {
+  GEMINI: 'light_gemini_api_key',
   CLAUDE: 'light_claude_api_key',
   OPENAI: 'light_openai_api_key',
 };
@@ -20,7 +21,7 @@ const STORAGE_KEYS = {
 /**
  * Save API key securely
  */
-export async function saveAPIKey(provider: 'claude' | 'openai', key: string): Promise<void> {
+export async function saveAPIKey(provider: 'gemini' | 'claude' | 'openai', key: string): Promise<void> {
   if (Platform.OS === 'web') {
     // For web, use localStorage (less secure but works)
     localStorage.setItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS], key);
@@ -37,7 +38,7 @@ export async function saveAPIKey(provider: 'claude' | 'openai', key: string): Pr
 /**
  * Load API key from secure storage
  */
-export async function loadAPIKey(provider: 'claude' | 'openai'): Promise<string | null> {
+export async function loadAPIKey(provider: 'gemini' | 'claude' | 'openai'): Promise<string | null> {
   try {
     if (Platform.OS === 'web') {
       return localStorage.getItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
@@ -55,7 +56,7 @@ export async function loadAPIKey(provider: 'claude' | 'openai'): Promise<string 
 /**
  * Delete API key from secure storage
  */
-export async function deleteAPIKey(provider: 'claude' | 'openai'): Promise<void> {
+export async function deleteAPIKey(provider: 'gemini' | 'claude' | 'openai'): Promise<void> {
   try {
     if (Platform.OS === 'web') {
       localStorage.removeItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
@@ -74,14 +75,16 @@ export async function deleteAPIKey(provider: 'claude' | 'openai'): Promise<void>
  * Initialize API keys from secure storage
  * Call this at app startup
  */
-export async function initializeAPIKeys(): Promise<{claude: string | null, openai: string | null}> {
+export async function initializeAPIKeys(): Promise<{gemini: string | null, claude: string | null, openai: string | null}> {
+  const gemini = await loadAPIKey('gemini');
   const claude = await loadAPIKey('claude');
   const openai = await loadAPIKey('openai');
   
   console.log('[API Keys] Initialized:', {
+    gemini: gemini ? '✓ Configured' : '✗ Not set',
     claude: claude ? '✓ Configured' : '✗ Not set',
     openai: openai ? '✓ Configured' : '✗ Not set',
   });
   
-  return { claude, openai };
+  return { gemini, claude, openai };
 }
