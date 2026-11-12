@@ -30,36 +30,61 @@ export default function AISettingsScreen() {
   }, []);
 
   async function loadKeys() {
+    console.log('[AI Settings] Loading keys from storage...');
     const gemini = await loadAPIKey('gemini');
     const claude = await loadAPIKey('claude');
     const openai = await loadAPIKey('openai');
     
-    if (gemini) setGeminiKey(gemini);
-    if (claude) setClaudeKey(claude);
-    if (openai) setOpenaiKey(openai);
+    if (gemini) {
+      setGeminiKey(gemini);
+      console.log('[AI Settings] Gemini key loaded:', '...' + gemini.slice(-4));
+    }
+    if (claude) {
+      setClaudeKey(claude);
+      console.log('[AI Settings] Claude key loaded:', '...' + claude.slice(-4));
+    }
+    if (openai) {
+      setOpenaiKey(openai);
+      console.log('[AI Settings] OpenAI key loaded:', '...' + openai.slice(-4));
+    }
   }
 
   async function handleSaveKeys() {
     try {
-      if (geminiKey) {
-        await saveAPIKey('gemini', geminiKey);
-        setAPIKey('gemini', geminiKey);
+      let savedCount = 0;
+      
+      if (geminiKey && geminiKey.trim().length > 10) {
+        await saveAPIKey('gemini', geminiKey.trim());
+        setAPIKey('gemini', geminiKey.trim());
+        savedCount++;
       }
-      if (claudeKey) {
-        await saveAPIKey('claude', claudeKey);
-        setAPIKey('claude', claudeKey);
+      if (claudeKey && claudeKey.trim().length > 10) {
+        await saveAPIKey('claude', claudeKey.trim());
+        setAPIKey('claude', claudeKey.trim());
+        savedCount++;
       }
-      if (openaiKey) {
-        await saveAPIKey('openai', openaiKey);
-        setAPIKey('openai', openaiKey);
+      if (openaiKey && openaiKey.trim().length > 10) {
+        await saveAPIKey('openai', openaiKey.trim());
+        setAPIKey('openai', openaiKey.trim());
+        savedCount++;
+      }
+      
+      if (savedCount === 0) {
+        Alert.alert('No Keys', 'Please enter at least one API key to save.');
+        return;
       }
       
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       
-      Alert.alert('Success', 'API keys saved securely! They will be used immediately.');
+      Alert.alert(
+        'Success!', 
+        `${savedCount} API key${savedCount > 1 ? 's' : ''} saved and activated immediately. No rebuild needed!`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to save API keys');
+      console.error('[AI Settings] Save error:', error);
+      Alert.alert('Error', 'Failed to save API keys. Please try again.');
     }
   }
 
