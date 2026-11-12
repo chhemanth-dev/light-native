@@ -4,16 +4,21 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable,
-  SafeAreaView, RefreshControl, Alert,
+  SafeAreaView, RefreshControl, Alert, Modal,
+  TextInput, ScrollView,
 } from "react-native";
 import { getPendingReminders, deleteReminder, type Reminder } from "../../src/lib/db";
-import { cancelAllReminders } from "../../src/lib/reminders";
+import { cancelAllReminders, scheduleReminder } from "../../src/lib/reminders";
 import { speak } from "../../src/lib/voice";
 import { formatRemindersForSpeech } from "../../src/lib/reminders";
 
 export default function RemindersScreen() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newTime, setNewTime] = useState('');
 
   async function load() {
     const r = await getPendingReminders();
@@ -48,6 +53,84 @@ export default function RemindersScreen() {
     try {
       speak(formatRemindersForSpeech(reminders)).catch(() => {});
     } catch { /* ignore */ }
+  }
+
+  async function handleAddReminder() {
+    if (!newTitle.trim()) {
+      Alert.alert('Error', 'Please enter a reminder title');
+      return;
+    }
+
+    // Parse date and time
+    let fireAt: number;
+    
+    if (newDate && newTime) {
+      // User provided both date and time
+      const [year, month, day] = newDate.split('-').map(Number);
+      const [hours, minutes] = newTime.split(':').map(Number);
+      fireAt = new Date(year, month - 1, day, hours, minutes).getTime();
+    } else if (newTime) {
+      // Only time provided, use today
+      const [hours, minutes] = newTime.split(':').map(Number);
+      const now = new Date();
+      fireAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes).getTime();
+      
+      // If time already passed today, schedule for tomorrow
+      if (fireAt < Date.now()) {
+        fireAt += 24 * 60 * 60 * 1000;
+      }
+    } else {
+      // No time provided, default to 1 hour from now
+      fireAt = Date.now() + 60 * 60 * 1000;
+    }
+
+    try {
+      await scheduleReminder({
+        id: Date.now().toString(),
+        title: newTitle.trim(),
+        time: fireAt,
+        repeatInterval: null,
+      });
+
+      // Reset form
+      setNewTitle('');
+      setNewDate('');
+      setNewTime('');
+      setShowAddModal(false);
+      
+      await load();
+      Alert.alert('Success', 'Reminder created!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create reminder');
+      console.error('[Reminders] Create error:', error);
+    }
+  }
+
+  function getQuickTimeOptions() {
+    const now = new Date();
+    return [
+      { label: 'In 30 min', minutes: 30 },
+      { label: 'In 1 hour', minutes: 60 },
+      { label: 'In 2 hours', minutes: 120 },
+      { label: 'Tomorrow 9am', getTime: () => {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(9, 0, 0, 0);
+        return tomorrow.getTime();
+      }},
+    ];
+  }
+
+  function setQuickTime(option: any) {
+    if (option.getTime) {
+      const time = new Date(option.getTime());
+      setNewDate(time.toISOString().split('T')[0]);
+      setNewTime(time.toTimeString().slice(0, 5));
+    } else {
+      const time = new Date(Date.now() + option.minutes * 60 * 1000);
+      setNewDate(time.toISOString().split('T')[0]);
+      setNewTime(time.toTimeString().slice(0, 5));
+    }
   }
 
   function formatFireAt(ts: number) {
@@ -89,16 +172,21 @@ export default function RemindersScreen() {
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.title}>Reminders</Text>
-        {reminders.length > 0 && (
-          <Pressable style={styles.readAllBtn} onPress={handleReadAll}>
-            <Text style={styles.readAllText}>Read aloud</Text>
+        <View style={styles.headerButtons}>
+          {reminders.length > 0 && (
+            <Pressable style={styles.readAllBtn} onPress={handleReadAll}>
+              <Text style={styles.readAllText}>🔊</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+            <Text style={styles.addBtnText}>+ Add</Text>
           </Pressable>
-        )}
+        </View>
       </View>
 
       <View style={styles.voiceHint}>
         <Text style={styles.voiceHintText}>
-          💡 Say "Remind me to call mum at 6pm" to Light
+          💡 Say "Remind me to call mum at 6pm" or tap + Add
         </Text>
       </View>
 
@@ -114,11 +202,83 @@ export default function RemindersScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No reminders set.</Text>
             <Text style={styles.emptySubText}>
-              Ask Light to remind you about anything.
+              Tap + Add or ask Light to remind you.
             </Text>
           </View>
         }
       />
+
+      {/* Add Reminder Modal */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Reminder</Text>
+              <Pressable onPress={() => setShowAddModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalScroll}>
+              <Text style={styles.inputLabel}>What to remind?</Text>
+              <TextInput
+                style={styles.input}
+                value={newTitle}
+                onChangeText={setNewTitle}
+                placeholder="e.g., Call doctor, Buy groceries..."
+                placeholderTextColor="#64748B"
+                autoFocus
+              />
+
+              <Text style={styles.inputLabel}>Quick Options</Text>
+              <View style={styles.quickButtons}>
+                {getQuickTimeOptions().map((option, index) => (
+                  <Pressable
+                    key={index}
+                    style={styles.quickBtn}
+                    onPress={() => setQuickTime(option)}
+                  >
+                    <Text style={styles.quickBtnText}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Or Choose Specific Time</Text>
+              <View style={styles.dateTimeRow}>
+                <View style={styles.dateTimeCol}>
+                  <Text style={styles.dateTimeLabel}>Date</Text>
+                  <TextInput
+                    style={styles.dateTimeInput}
+                    value={newDate}
+                    onChangeText={setNewDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#64748B"
+                  />
+                </View>
+                <View style={styles.dateTimeCol}>
+                  <Text style={styles.dateTimeLabel}>Time</Text>
+                  <TextInput
+                    style={styles.dateTimeInput}
+                    value={newTime}
+                    onChangeText={setNewTime}
+                    placeholder="HH:MM"
+                    placeholderTextColor="#64748B"
+                  />
+                </View>
+              </View>
+
+              <Pressable style={styles.createBtn} onPress={handleAddReminder}>
+                <Text style={styles.createBtnText}>Create Reminder</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -138,6 +298,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
   },
+  headerButtons: { flexDirection: "row", gap: 8 },
   readAllBtn: {
     backgroundColor: "#0F1F3D",
     borderRadius: 8,
@@ -146,7 +307,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1D4ED8",
   },
-  readAllText: { color: "#93C5FD", fontSize: 12 },
+  readAllText: { color: "#93C5FD", fontSize: 16 },
+  addBtn: {
+    backgroundColor: "#1D4ED8",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  addBtnText: { color: "#FFF", fontSize: 14, fontWeight: "600" },
   voiceHint: {
     marginHorizontal: 16,
     marginBottom: 8,
@@ -186,4 +354,82 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyText: { color: "#334155", fontSize: 15 },
   emptySubText: { color: "#1E293B", fontSize: 12, textAlign: "center", maxWidth: 240 },
+  
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#0F172A",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+    maxHeight: "90%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+  },
+  modalTitle: { color: "#E2E8F0", fontSize: 20, fontWeight: "600" },
+  modalClose: { color: "#64748B", fontSize: 24 },
+  modalScroll: { padding: 20 },
+  inputLabel: {
+    color: "#94A3B8",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    padding: 14,
+    color: "#E2E8F0",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  quickButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  quickBtn: {
+    backgroundColor: "#1E293B",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  quickBtnText: { color: "#93C5FD", fontSize: 14 },
+  dateTimeRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  dateTimeCol: { flex: 1 },
+  dateTimeLabel: { color: "#64748B", fontSize: 12, marginBottom: 6 },
+  dateTimeInput: {
+    backgroundColor: "#1E293B",
+    borderRadius: 8,
+    padding: 12,
+    color: "#E2E8F0",
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  createBtn: {
+    backgroundColor: "#1D4ED8",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 24,
+  },
+  createBtnText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
 });
