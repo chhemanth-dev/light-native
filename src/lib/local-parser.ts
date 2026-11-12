@@ -3,6 +3,8 @@
  * Parses voice commands locally for reminders and app opening
  */
 
+import { getInstalledApps, isAppInstalled } from './accessibility';
+
 export interface ParsedReminder {
   title: string;
   minutes: number;
@@ -11,6 +13,34 @@ export interface ParsedReminder {
 export interface ParsedAppCommand {
   appName: string;
   packageName?: string;
+}
+
+// Cache for installed apps (refreshed periodically)
+let installedAppsCache: Array<{packageName: string, appName: string}> = [];
+let lastAppCacheRefresh = 0;
+
+/**
+ * Refresh installed apps cache
+ */
+export async function refreshInstalledAppsCache(): Promise<void> {
+  try {
+    installedAppsCache = await getInstalledApps();
+    lastAppCacheRefresh = Date.now();
+    console.log('[LocalParser] Cached', installedAppsCache.length, 'installed apps');
+  } catch (error) {
+    console.error('[LocalParser] Failed to refresh app cache:', error);
+  }
+}
+
+/**
+ * Get installed apps (with caching)
+ */
+async function getCachedInstalledApps(): Promise<Array<{packageName: string, appName: string}>> {
+  // Refresh cache if older than 5 minutes
+  if (Date.now() - lastAppCacheRefresh > 5 * 60 * 1000) {
+    await refreshInstalledAppsCache();
+  }
+  return installedAppsCache;
 }
 
 /**
@@ -126,7 +156,7 @@ export function parseReminderLocally(text: string): ParsedReminder | null {
  * - "launch instagram"
  * - "start youtube"
  */
-export function parseAppCommandLocally(text: string): ParsedAppCommand | null {
+export async function parseAppCommandLocally(text: string): Promise<ParsedAppCommand | null> {
   const lower = text.toLowerCase();
   
   // Check if it's an app opening command
@@ -135,6 +165,25 @@ export function parseAppCommandLocally(text: string): ParsedAppCommand | null {
   
   if (match) {
     const appName = match[1].trim();
+    
+    // First try static map
+    const staticPackage = APP_NAME_MAP[appName.toLowerCase()];
+    if (staticPackage) {
+      return { appName, packageName: staticPackage };
+    }
+    
+    // Then search installed apps dynamically
+    const installedApps = await getCachedInstalledApps();
+    const foundApp = installedApps.find(app => 
+      app.appName.toLowerCase().includes(appName.toLowerCase()) ||
+      appName.toLowerCase().includes(app.appName.toLowerCase())
+    );
+    
+    if (foundApp) {
+      console.log('[LocalParser] Found installed app:', foundApp.appName, foundApp.packageName);
+      return { appName: foundApp.appName, packageName: foundApp.packageName };
+    }
+    
     return { appName };
   }
   

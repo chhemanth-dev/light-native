@@ -11,7 +11,8 @@ import {
   isReminderCommand, 
   isAppOpenCommand, 
   APP_NAME_MAP,
-  isAppExcluded 
+  isAppExcluded,
+  refreshInstalledAppsCache
 } from "./local-parser";
 import { openApp } from "./accessibility";
 
@@ -54,6 +55,11 @@ export class LightAssistant {
   startSession(sessionId: string) {
     this.sessionId = sessionId;
     this.history = [];
+    
+    // Refresh installed apps cache when session starts
+    refreshInstalledAppsCache().catch(err => 
+      console.warn('[Assistant] Failed to refresh app cache:', err)
+    );
   }
 
   async endSession() {
@@ -169,19 +175,19 @@ export class LightAssistant {
     // ========================================
     if (isAppOpenCommand(text)) {
       console.log("[Assistant] 📱 App open command detected!");
-      const appCmd = parseAppCommandLocally(text);
+      const appCmd = await parseAppCommandLocally(text);
       if (appCmd) {
         try {
-          // Try to map app name to package
-          const packageName = APP_NAME_MAP[appCmd.appName.toLowerCase()] || appCmd.packageName;
+          // Get package name
+          const packageName = appCmd.packageName;
           
           if (!packageName) {
-            return `I couldn't find an app called "${appCmd.appName}", sir. Try saying the exact app name.`;
+            return `I couldn't find "${appCmd.appName}" on your device, sir. Make sure it's installed.`;
           }
           
           // Check if app is excluded (payment/banking)
           if (isAppExcluded(packageName)) {
-            return `For security reasons, I cannot open ${appCmd.appName} via voice command, sir. Please open it manually.`;
+            return `For security, I cannot open payment or banking apps via voice, sir. Please open ${appCmd.appName} manually.`;
           }
           
           console.log("[Assistant] Opening app:", packageName);
@@ -189,7 +195,7 @@ export class LightAssistant {
           return `Opening ${appCmd.appName}, sir.`;
         } catch (error) {
           console.error("[Assistant] ❌ Error opening app:", error);
-          return `I couldn't open ${appCmd.appName}, sir. It may not be installed.`;
+          return `I had trouble opening ${appCmd.appName}, sir. It may not be installed or I don't have permission.`;
         }
       }
     }
