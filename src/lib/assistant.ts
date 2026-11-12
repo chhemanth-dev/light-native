@@ -5,6 +5,15 @@ import { ask, type AIMessage } from "./gemini";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
 import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } from "./reminders";
+import { 
+  parseReminderLocally, 
+  parseAppCommandLocally, 
+  isReminderCommand, 
+  isAppOpenCommand, 
+  APP_NAME_MAP,
+  isAppExcluded 
+} from "./local-parser";
+import { openApp } from "./accessibility";
 
 export type AssistantState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -155,6 +164,80 @@ export class LightAssistant {
     const lower = text.toLowerCase().trim();
     console.log("[Assistant] handleLocalIntent checking:", lower);
 
+    // ========================================
+    // PRIORITY 1: APP OPENING (NO AI NEEDED)
+    // ========================================
+    if (isAppOpenCommand(text)) {
+      console.log("[Assistant] 📱 App open command detected!");
+      const appCmd = parseAppCommandLocally(text);
+      if (appCmd) {
+        try {
+          // Try to map app name to package
+          const packageName = APP_NAME_MAP[appCmd.appName.toLowerCase()] || appCmd.packageName;
+          
+          if (!packageName) {
+            return `I couldn't find an app called "${appCmd.appName}", sir. Try saying the exact app name.`;
+          }
+          
+          // Check if app is excluded (payment/banking)
+          if (isAppExcluded(packageName)) {
+            return `For security reasons, I cannot open ${appCmd.appName} via voice command, sir. Please open it manually.`;
+          }
+          
+          console.log("[Assistant] Opening app:", packageName);
+          await openApp(packageName);
+          return `Opening ${appCmd.appName}, sir.`;
+        } catch (error) {
+          console.error("[Assistant] ❌ Error opening app:", error);
+          return `I couldn't open ${appCmd.appName}, sir. It may not be installed.`;
+        }
+      }
+    }
+
+    // ========================================
+    // PRIORITY 2: REMINDERS (NO AI NEEDED)
+    // ========================================
+    if (isReminderCommand(text)) {
+      console.log("[Assistant] ⏰ Reminder command detected!");
+      const parsed = parseReminderLocally(text);
+      if (parsed) {
+        try {
+          const fireAt = Date.now() + (parsed.minutes * 60 * 1000);
+          await scheduleReminder({
+            id: Date.now().toString(),
+            title: parsed.title,
+            time: fireAt,
+            repeatInterval: null,
+          });
+          
+          let timeDesc = '';
+          if (parsed.minutes < 60) {
+            timeDesc = `in ${parsed.minutes} minute${parsed.minutes !== 1 ? 's' : ''}`;
+          } else {
+            const hours = Math.floor(parsed.minutes / 60);
+            const mins = parsed.minutes % 60;
+            timeDesc = `in ${hours} hour${hours !== 1 ? 's' : ''}${mins > 0 ? ` and ${mins} minute${mins !== 1 ? 's' : ''}` : ''}`;
+          }
+          
+          return `Reminder set ${timeDesc}: "${parsed.title}", sir.`;
+        } catch (error) {
+          console.error("[Assistant] ❌ Error setting reminder:", error);
+          return "I'm sorry, sir. I couldn't schedule that reminder.";
+        }
+      }
+      
+      // Fallback to old parser if new one didn't work
+      const oldParsed = parseReminderFromSpeech(text);
+      if (oldParsed) {
+        try {
+          await scheduleReminder(oldParsed);
+          return formatReminderConfirmation(oldParsed.title, oldParsed.time);
+        } catch {
+          return "I'm sorry, sir. I couldn't schedule that reminder.";
+        }
+      }
+    }
+
     // READ MESSAGES
     if (
       lower.match(/\b(messages?|notifications?|updates?|whatsapp|gmail|instagram|emails?)\b/) &&
@@ -181,19 +264,6 @@ export class LightAssistant {
       } catch (error) {
         console.error("[Assistant] ❌ Error retrieving messages:", error);
         return "I couldn't retrieve your messages, sir.";
-      }
-    }
-
-    // SET REMINDER
-    if (lower.match(/\b(remind|reminder|alarm|alert)\b/)) {
-      const parsed = parseReminderFromSpeech(text);
-      if (parsed) {
-        try {
-          await scheduleReminder(parsed);
-          return formatReminderConfirmation(parsed.title, parsed.time);
-        } catch {
-          return "I'm sorry, sir. I couldn't schedule that reminder.";
-        }
       }
     }
 
