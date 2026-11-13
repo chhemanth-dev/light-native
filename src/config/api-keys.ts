@@ -19,37 +19,94 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Save API key securely
+ * Save API keys securely (supports multiple keys as array)
  */
-export async function saveAPIKey(provider: 'gemini' | 'claude' | 'openai', key: string): Promise<void> {
+export async function saveAPIKey(provider: 'gemini' | 'claude' | 'openai', keys: string | string[]): Promise<void> {
+  // Convert single key to array for consistency
+  const keyArray = Array.isArray(keys) ? keys : [keys];
+  const jsonKeys = JSON.stringify(keyArray);
+  
   if (Platform.OS === 'web') {
     // For web, use localStorage (less secure but works)
-    localStorage.setItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS], key);
+    localStorage.setItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS], jsonKeys);
   } else {
     // For mobile, use SecureStore (encrypted)
     await SecureStore.setItemAsync(
       STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS],
-      key
+      jsonKeys
     );
   }
-  console.log(`[API Keys] Saved ${provider} key securely`);
+  console.log(`[API Keys] Saved ${keyArray.length} ${provider} key(s) securely`);
 }
 
 /**
- * Load API key from secure storage
+ * Load API keys from secure storage (returns array for multiple keys support)
  */
 export async function loadAPIKey(provider: 'gemini' | 'claude' | 'openai'): Promise<string | null> {
   try {
+    let stored: string | null;
     if (Platform.OS === 'web') {
-      return localStorage.getItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
+      stored = localStorage.getItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
     } else {
-      return await SecureStore.getItemAsync(
+      stored = await SecureStore.getItemAsync(
         STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]
       );
     }
+    
+    if (!stored) return null;
+    
+    // Try to parse as JSON array (new format)
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Return first key for backward compatibility with UI
+        return parsed[0];
+      }
+    } catch {
+      // If parsing fails, it's an old single key (backward compatibility)
+      return stored;
+    }
+    
+    return null;
   } catch (error) {
     console.error(`[API Keys] Error loading ${provider} key:`, error);
     return null;
+  }
+}
+
+/**
+ * Load all API keys as arrays (for rotation system)
+ */
+export async function loadAPIKeys(provider: 'gemini' | 'claude' | 'openai'): Promise<string[]> {
+  try {
+    let stored: string | null;
+    if (Platform.OS === 'web') {
+      stored = localStorage.getItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
+    } else {
+      stored = await SecureStore.getItemAsync(
+        STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]
+      );
+    }
+    
+    if (!stored) return [];
+    
+    // Try to parse as JSON array (new format)
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(k => k && k.trim().length > 10);
+      }
+    } catch {
+      // If parsing fails, it's an old single key (backward compatibility)
+      if (stored.trim().length > 10) {
+        return [stored];
+      }
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`[API Keys] Error loading ${provider} keys:`, error);
+    return [];
   }
 }
 
@@ -84,6 +141,24 @@ export async function initializeAPIKeys(): Promise<{gemini: string | null, claud
     gemini: gemini ? '✓ Configured' : '✗ Not set',
     claude: claude ? '✓ Configured' : '✗ Not set',
     openai: openai ? '✓ Configured' : '✗ Not set',
+  });
+  
+  return { gemini, claude, openai };
+}
+
+/**
+ * Initialize all API keys as arrays (for rotation system)
+ * Call this at app startup for multi-key support
+ */
+export async function initializeAllAPIKeys(): Promise<{gemini: string[], claude: string[], openai: string[]}> {
+  const gemini = await loadAPIKeys('gemini');
+  const claude = await loadAPIKeys('claude');
+  const openai = await loadAPIKeys('openai');
+  
+  console.log('[API Keys] Initialized (multi-key):', {
+    gemini: `${gemini.length} key(s)`,
+    claude: `${claude.length} key(s)`,
+    openai: `${openai.length} key(s)`,
   });
   
   return { gemini, claude, openai };

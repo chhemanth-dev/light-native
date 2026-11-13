@@ -1,6 +1,6 @@
 /**
  * AI Provider Settings Screen
- * Allows users to choose AI provider and configure API keys
+ * Allows users to choose AI provider and configure multiple API keys with rotation
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -15,82 +15,202 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { setAIProvider, getAIProvider } from '../src/lib/gemini';
-import { setAPIKey, isProviderConfigured, AIProvider } from '../src/lib/ai-providers';
-import { saveAPIKey, loadAPIKey } from '../src/config/api-keys';
+import { setAPIKey, addAPIKey, isProviderConfigured, AIProvider } from '../src/lib/ai-providers';
+import { saveAPIKey, loadAPIKeys } from '../src/config/api-keys';
+
+type ProviderKeys = {
+  gemini: string[];
+  claude: string[];
+  openai: string[];
+};
 
 export default function AISettingsScreen() {
   const [currentProvider, setCurrentProvider] = useState<AIProvider>(getAIProvider());
-  const [geminiKey, setGeminiKey] = useState('');
-  const [claudeKey, setClaudeKey] = useState('');
-  const [openaiKey, setOpenaiKey] = useState('');
+  const [keys, setKeys] = useState<ProviderKeys>({
+    gemini: [],
+    claude: [],
+    openai: [],
+  });
+  const [newKeys, setNewKeys] = useState({
+    gemini: '',
+    claude: '',
+    openai: '',
+  });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    loadKeys();
+    loadAllKeys();
   }, []);
 
-  async function loadKeys() {
-    console.log('[AI Settings] Loading keys from storage...');
-    const gemini = await loadAPIKey('gemini');
-    const claude = await loadAPIKey('claude');
-    const openai = await loadAPIKey('openai');
+  async function loadAllKeys() {
+    console.log('[AI Settings] Loading all keys from storage...');
+    const gemini = await loadAPIKeys('gemini');
+    const claude = await loadAPIKeys('claude');
+    const openai = await loadAPIKeys('openai');
     
-    if (gemini) {
-      setGeminiKey(gemini);
-      console.log('[AI Settings] Gemini key loaded:', '...' + gemini.slice(-4));
+    setKeys({ gemini, claude, openai });
+    
+    console.log('[AI Settings] Loaded keys:', {
+      gemini: `${gemini.length} key(s)`,
+      claude: `${claude.length} key(s)`,
+      openai: `${openai.length} key(s)`,
+    });
+  }
+
+  async function handleAddKey(provider: 'gemini' | 'claude' | 'openai') {
+    const key = newKeys[provider].trim();
+    
+    if (!key || key.length < 10) {
+      Alert.alert('Invalid Key', 'Please enter a valid API key.');
+      return;
     }
-    if (claude) {
-      setClaudeKey(claude);
-      console.log('[AI Settings] Claude key loaded:', '...' + claude.slice(-4));
+    
+    // Check if key already exists
+    if (keys[provider].includes(key)) {
+      Alert.alert('Duplicate Key', 'This key is already added.');
+      return;
     }
-    if (openai) {
-      setOpenaiKey(openai);
-      console.log('[AI Settings] OpenAI key loaded:', '...' + openai.slice(-4));
+    
+    try {
+      const updatedKeys = [...keys[provider], key];
+      
+      // Save to secure storage
+      await saveAPIKey(provider, updatedKeys);
+      
+      // Update in-memory API provider system
+      if (updatedKeys.length === 1) {
+        setAPIKey(provider, key); // First key
+      } else {
+        addAPIKey(provider, key); // Additional key
+      }
+      
+      // Update UI
+      setKeys(prev => ({
+        ...prev,
+        [provider]: updatedKeys,
+      }));
+      
+      // Clear input
+      setNewKeys(prev => ({
+        ...prev,
+        [provider]: '',
+      }));
+      
+      Alert.alert(
+        'Success!',
+        `Added ${provider.toUpperCase()} key #${updatedKeys.length}. ${updatedKeys.length === 1 ? 'This is your PRIMARY key.' : 'Will be used as backup if primary fails.'}`
+      );
+    } catch (error) {
+      console.error('[AI Settings] Add key error:', error);
+      Alert.alert('Error', 'Failed to save API key. Please try again.');
     }
   }
 
-  async function handleSaveKeys() {
-    try {
-      let savedCount = 0;
-      
-      if (geminiKey && geminiKey.trim().length > 10) {
-        await saveAPIKey('gemini', geminiKey.trim());
-        setAPIKey('gemini', geminiKey.trim());
-        savedCount++;
-      }
-      if (claudeKey && claudeKey.trim().length > 10) {
-        await saveAPIKey('claude', claudeKey.trim());
-        setAPIKey('claude', claudeKey.trim());
-        savedCount++;
-      }
-      if (openaiKey && openaiKey.trim().length > 10) {
-        await saveAPIKey('openai', openaiKey.trim());
-        setAPIKey('openai', openaiKey.trim());
-        savedCount++;
-      }
-      
-      if (savedCount === 0) {
-        Alert.alert('No Keys', 'Please enter at least one API key to save.');
-        return;
-      }
-      
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-      
-      Alert.alert(
-        'Success!', 
-        `${savedCount} API key${savedCount > 1 ? 's' : ''} saved and activated immediately. No rebuild needed!`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error) {
-      console.error('[AI Settings] Save error:', error);
-      Alert.alert('Error', 'Failed to save API keys. Please try again.');
-    }
+  async function handleRemoveKey(provider: 'gemini' | 'claude' | 'openai', index: number) {
+    Alert.alert(
+      'Remove Key?',
+      `Remove ${provider.toUpperCase()} key #${index + 1}?${index === 0 ? ' (This is your PRIMARY key!)' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedKeys = keys[provider].filter((_, i) => i !== index);
+              
+              // Save to secure storage
+              await saveAPIKey(provider, updatedKeys);
+              
+              // Update in-memory system (reload all keys)
+              if (updatedKeys.length > 0) {
+                setAPIKey(provider, updatedKeys[0]);
+                updatedKeys.slice(1).forEach(k => addAPIKey(provider, k));
+              }
+              
+              // Update UI
+              setKeys(prev => ({
+                ...prev,
+                [provider]: updatedKeys,
+              }));
+              
+              Alert.alert('Removed', `${provider.toUpperCase()} key removed successfully.`);
+            } catch (error) {
+              console.error('[AI Settings] Remove key error:', error);
+              Alert.alert('Error', 'Failed to remove key.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   function handleProviderChange(provider: AIProvider) {
     setAIProvider(provider);
     setCurrentProvider(provider);
+  }
+
+  function renderKeysList(provider: 'gemini' | 'claude' | 'openai', color: string, icon: string) {
+    const providerKeys = keys[provider];
+    const displayName = provider === 'gemini' ? 'Gemini' : provider === 'claude' ? 'Claude' : 'OpenAI';
+    
+    return (
+      <View style={styles.keySection}>
+        <View style={styles.keySectionHeader}>
+          <Text style={styles.keySectionIcon}>{icon}</Text>
+          <Text style={styles.keySectionTitle}>{displayName} API Keys</Text>
+          <Text style={[styles.keyCount, { color }]}>
+            {providerKeys.length} key{providerKeys.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        {/* Existing Keys */}
+        {providerKeys.map((key, index) => (
+          <View key={index} style={styles.keyCard}>
+            <View style={styles.keyInfo}>
+              <Text style={styles.keyLabel}>
+                {index === 0 ? '🎯 PRIMARY KEY' : `⚙️ BACKUP KEY #${index}`}
+              </Text>
+              <Text style={styles.keyValue}>
+                {key.substring(0, 12)}...{key.slice(-4)}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.removeBtn}
+              onPress={() => handleRemoveKey(provider, index)}
+            >
+              <Text style={styles.removeBtnText}>✕</Text>
+            </Pressable>
+          </View>
+        ))}
+
+        {/* Add New Key */}
+        <View style={styles.addKeyContainer}>
+          <TextInput
+            style={styles.keyInput}
+            value={newKeys[provider]}
+            onChangeText={(text) => setNewKeys(prev => ({ ...prev, [provider]: text }))}
+            placeholder={`Add ${displayName} API key...`}
+            placeholderTextColor="#64748B"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable
+            style={[styles.addBtn, { backgroundColor: color }]}
+            onPress={() => handleAddKey(provider)}
+          >
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.keyHint}>
+          {provider === 'gemini' && '🔗 Get key at: makersuite.google.com/app/apikey'}
+          {provider === 'claude' && '🔗 Get key at: console.anthropic.com'}
+          {provider === 'openai' && '🔗 Get key at: platform.openai.com/api-keys'}
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -120,7 +240,7 @@ export default function AISettingsScreen() {
             <View style={styles.providerInfo}>
               <Text style={styles.providerName}>Auto (Recommended)</Text>
               <Text style={styles.providerDesc}>
-                Tries all providers for best reliability
+                Tries all providers with smart key rotation
               </Text>
             </View>
             {currentProvider === 'auto' && (
@@ -136,7 +256,7 @@ export default function AISettingsScreen() {
             <View style={styles.providerInfo}>
               <Text style={styles.providerName}>Gemini (Google)</Text>
               <Text style={styles.providerDesc}>
-                Fast responses • Free • Good for quick answers
+                Fast • Free tier available • Good for quick tasks
               </Text>
             </View>
             {currentProvider === 'gemini' && (
@@ -152,7 +272,7 @@ export default function AISettingsScreen() {
             <View style={styles.providerInfo}>
               <Text style={styles.providerName}>Claude (Anthropic)</Text>
               <Text style={styles.providerDesc}>
-                Best reasoning • Thoughtful • Requires API key
+                Best reasoning • Thoughtful responses
               </Text>
             </View>
             {currentProvider === 'claude' && (
@@ -168,7 +288,7 @@ export default function AISettingsScreen() {
             <View style={styles.providerInfo}>
               <Text style={styles.providerName}>OpenAI (GPT-4)</Text>
               <Text style={styles.providerDesc}>
-                Advanced tasks • Creative • Requires API key
+                Advanced tasks • Creative • Most capable
               </Text>
             </View>
             {currentProvider === 'openai' && (
@@ -177,71 +297,27 @@ export default function AISettingsScreen() {
           </Pressable>
         </View>
 
-        {/* API Keys */}
+        {/* Multi-Key Info Banner */}
+        <View style={styles.infoBanner}>
+          <Text style={styles.infoBannerTitle}>💡 Multiple Keys Support</Text>
+          <Text style={styles.infoBannerText}>
+            Add multiple API keys per provider for automatic failover.{'\n'}
+            • First key = PRIMARY (always tried first){'\n'}
+            • Additional keys = BACKUP (used if primary fails){'\n'}
+            • No rebuild needed - works immediately!
+          </Text>
+        </View>
+
+        {/* API Keys Sections */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API Keys</Text>
+          <Text style={styles.sectionTitle}>API Keys Management</Text>
           <Text style={styles.sectionDesc}>
-            Add your API keys here. When balance runs out, just update the key - no rebuild needed!
+            Add and manage your API keys. Multiple keys per provider supported!
           </Text>
 
-          <Text style={styles.label}>Gemini API Key (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={geminiKey}
-            onChangeText={setGeminiKey}
-            placeholder="AIzaSy..."
-            placeholderTextColor="#64748B"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.hint}>
-            Get your key at: makersuite.google.com/app/apikey
-          </Text>
-
-          <Text style={styles.label}>Claude API Key (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={claudeKey}
-            onChangeText={setClaudeKey}
-            placeholder="sk-ant-..."
-            placeholderTextColor="#64748B"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.hint}>
-            Get your key at: console.anthropic.com
-          </Text>
-
-          <Text style={styles.label}>OpenAI API Key (Recommended)</Text>
-          <TextInput
-            style={styles.input}
-            value={openaiKey}
-            onChangeText={setOpenaiKey}
-            placeholder="sk-proj-... or sk-..."
-            placeholderTextColor="#64748B"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.hint}>
-            Get your key at: platform.openai.com/api-keys
-          </Text>
-
-          <Pressable
-            style={[styles.saveBtn, saved && styles.savedBtn]}
-            onPress={handleSaveKeys}
-          >
-            <Text style={styles.saveText}>
-              {saved ? '✓ Saved!' : 'Save Keys'}
-            </Text>
-          </Pressable>
-
-          <Text style={styles.note}>
-            🔒 Keys are encrypted and stored on your device only{'\n'}
-            💡 You can update keys anytime without rebuilding the app!
-          </Text>
+          {renderKeysList('openai', '#10B981', '🚀')}
+          {renderKeysList('claude', '#8B5CF6', '🧠')}
+          {renderKeysList('gemini', '#3B82F6', '⚡')}
         </View>
 
         {/* Status */}
@@ -250,23 +326,31 @@ export default function AISettingsScreen() {
           
           <View style={styles.statusRow}>
             <Text style={styles.statusLabel}>Gemini:</Text>
-            <Text style={styles.statusReady}>✓ Ready (Free)</Text>
+            <Text style={keys.gemini.length > 0 ? styles.statusReady : styles.statusNotConfigured}>
+              {keys.gemini.length > 0 ? `✓ ${keys.gemini.length} key(s)` : '○ No keys'}
+            </Text>
           </View>
 
           <View style={styles.statusRow}>
             <Text style={styles.statusLabel}>Claude:</Text>
-            <Text style={isProviderConfigured('claude') ? styles.statusReady : styles.statusNotConfigured}>
-              {isProviderConfigured('claude') ? '✓ Configured' : '○ Not configured'}
+            <Text style={keys.claude.length > 0 ? styles.statusReady : styles.statusNotConfigured}>
+              {keys.claude.length > 0 ? `✓ ${keys.claude.length} key(s)` : '○ No keys'}
             </Text>
           </View>
 
           <View style={styles.statusRow}>
             <Text style={styles.statusLabel}>OpenAI:</Text>
-            <Text style={isProviderConfigured('openai') ? styles.statusReady : styles.statusNotConfigured}>
-              {isProviderConfigured('openai') ? '✓ Configured' : '○ Not configured'}
+            <Text style={keys.openai.length > 0 ? styles.statusReady : styles.statusNotConfigured}>
+              {keys.openai.length > 0 ? `✓ ${keys.openai.length} key(s)` : '○ No keys'}
             </Text>
           </View>
         </View>
+
+        <Text style={styles.footerNote}>
+          🔒 All keys are encrypted and stored securely on your device{'\n'}
+          🔄 Keys are rotated automatically when balance runs out{'\n'}
+          ⚡ Changes take effect immediately - no app rebuild required!
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -328,45 +412,125 @@ const styles = StyleSheet.create({
   providerDesc: { color: '#64748B', fontSize: 13 },
   checkmark: { color: '#3B82F6', fontSize: 24, fontWeight: 'bold' },
 
-  label: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-    marginTop: 16,
+  infoBanner: {
+    backgroundColor: '#0A1829',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
   },
-  input: {
+  infoBannerTitle: {
+    color: '#3B82F6',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  infoBannerText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+
+  keySection: {
     backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  keySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  keySectionIcon: { fontSize: 24, marginRight: 10 },
+  keySectionTitle: {
+    flex: 1,
+    color: '#E2E8F0',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  keyCount: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  keyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0A1219',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  keyInfo: { flex: 1 },
+  keyLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  keyValue: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
+  removeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#991B1B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnText: {
+    color: '#FEE2E2',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  addKeyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  keyInput: {
+    flex: 1,
+    backgroundColor: '#0A1219',
+    borderRadius: 8,
+    padding: 12,
     color: '#E2E8F0',
     borderWidth: 1,
     borderColor: '#1E293B',
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'monospace',
   },
-  hint: {
-    color: '#475569',
-    fontSize: 12,
-    marginTop: 6,
-  },
-
-  saveBtn: {
-    backgroundColor: '#1D4ED8',
-    borderRadius: 12,
-    padding: 16,
+  addBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 24,
+    justifyContent: 'center',
   },
-  savedBtn: { backgroundColor: '#10B981' },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  addBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 
-  note: {
-    color: '#64748B',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 16,
-    lineHeight: 18,
+  keyHint: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 8,
   },
 
   statusRow: {
@@ -380,4 +544,12 @@ const styles = StyleSheet.create({
   statusLabel: { color: '#94A3B8', fontSize: 14 },
   statusReady: { color: '#10B981', fontSize: 14, fontWeight: '500' },
   statusNotConfigured: { color: '#64748B', fontSize: 14 },
+
+  footerNote: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 24,
+    lineHeight: 20,
+  },
 });

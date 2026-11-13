@@ -14,11 +14,19 @@ import { initializeNotifications } from "../src/lib/notificationSetup";
 
 // Optional: Load API keys if local file exists (git-ignored for security)
 let initializeMyAPIKeys: (() => Promise<void>) | null = null;
+let loadSavedAPIKeys: (() => Promise<void>) | null = null;
 try {
   const apiKeysModule = require("../src/config/init-api-keys.local");
   initializeMyAPIKeys = apiKeysModule.initializeMyAPIKeys;
+  loadSavedAPIKeys = apiKeysModule.loadSavedAPIKeys;
 } catch (e) {
-  console.warn('[Setup] init-api-keys.local.ts not found - API keys will need to be set manually');
+  // Fallback to default module (no .local file)
+  try {
+    const apiKeysModule = require("../src/config/init-api-keys");
+    loadSavedAPIKeys = apiKeysModule.loadSavedAPIKeys;
+  } catch (err) {
+    console.warn('[Setup] Could not load API keys module');
+  }
 }
 
 export default function RootLayout() {
@@ -30,9 +38,15 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        // Initialize API keys FIRST (Claude, OpenAI, etc.) - if available
+        // Initialize API keys FIRST
+        // 1. Load from local file if available (for development)
         if (initializeMyAPIKeys) {
           await initializeMyAPIKeys();
+        }
+        
+        // 2. Load saved keys from secure storage (for production use)
+        if (loadSavedAPIKeys) {
+          await loadSavedAPIKeys();
         }
         
         // Initialize notifications (channels, permissions, handler)
