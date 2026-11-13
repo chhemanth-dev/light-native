@@ -8,13 +8,15 @@ import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } f
 import { 
   parseReminderLocally, 
   parseAppCommandLocally, 
+  parsePhoneCallLocally,
   isReminderCommand, 
-  isAppOpenCommand, 
+  isAppOpenCommand,
+  isPhoneCallCommand,
   APP_NAME_MAP,
   isAppExcluded,
   refreshInstalledAppsCache
 } from "./local-parser";
-import { openApp } from "./accessibility";
+import { openApp, makePhoneCall } from "./accessibility";
 
 export type AssistantState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -184,7 +186,31 @@ export class LightAssistant {
     console.log("[Assistant] handleLocalIntent checking:", lower);
 
     // ========================================
-    // PRIORITY 1: APP OPENING (NO AI NEEDED)
+    // PRIORITY 1: PHONE CALLS (NO AI NEEDED)
+    // ========================================
+    if (isPhoneCallCommand(text)) {
+      console.log("[Assistant] 📞 Phone call command detected!");
+      const callCmd = parsePhoneCallLocally(text);
+      if (callCmd) {
+        try {
+          if (callCmd.phoneNumber) {
+            // Direct number call
+            console.log("[Assistant] Calling number:", callCmd.phoneNumber);
+            await makePhoneCall(callCmd.phoneNumber);
+            return `Calling ${callCmd.phoneNumber}, sir.`;
+          } else if (callCmd.contactName) {
+            // Contact name - we can't look up contacts without AI, but we can try
+            return `I would call ${callCmd.contactName}, sir, but I need to look up their number. This feature requires AI to be working.`;
+          }
+        } catch (error) {
+          console.error("[Assistant] ❌ Error making call:", error);
+          return `I had trouble making that call, sir. Please check permissions.`;
+        }
+      }
+    }
+
+    // ========================================
+    // PRIORITY 2: APP OPENING (NO AI NEEDED)
     // ========================================
     if (isAppOpenCommand(text)) {
       console.log("[Assistant] 📱 App open command detected!");
@@ -214,7 +240,7 @@ export class LightAssistant {
     }
 
     // ========================================
-    // PRIORITY 2: REMINDERS (NO AI NEEDED)
+    // PRIORITY 3: REMINDERS (NO AI NEEDED)
     // ========================================
     if (isReminderCommand(text)) {
       console.log("[Assistant] ⏰ Reminder command detected!");

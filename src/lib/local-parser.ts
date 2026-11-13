@@ -197,6 +197,7 @@ export const APP_NAME_MAP: Record<string, string> = {
   // Social Media
   'whatsapp': 'com.whatsapp',
   'instagram': 'com.instagram.android',
+  'threads': 'com.instagram.barcelona',
   'facebook': 'com.facebook.katana',
   'twitter': 'com.twitter.android',
   'x': 'com.twitter.android',
@@ -297,4 +298,55 @@ export function isReminderCommand(text: string): boolean {
 export function isAppOpenCommand(text: string): boolean {
   const lower = text.toLowerCase();
   return /(?:open|launch|start|run)\s+/i.test(lower);
+}
+
+/**
+ * Phone call command interface
+ */
+export interface ParsedPhoneCall {
+  phoneNumber?: string;
+  contactName?: string;
+}
+
+/**
+ * Parse phone call command (no AI needed)
+ * Examples:
+ * - "call mom"
+ * - "call 1234567890"
+ * - "phone john"
+ * - "dial 555-1234"
+ */
+export function parsePhoneCallLocally(text: string): ParsedPhoneCall | null {
+  const lower = text.toLowerCase();
+  
+  // Pattern 1: "call/phone/dial <number>"
+  const numberPattern = /(?:call|phone|dial)\s+([\d\s\-\(\)\+]+)/i;
+  const numberMatch = text.match(numberPattern);
+  if (numberMatch) {
+    const phoneNumber = numberMatch[1].replace(/[\s\-\(\)]/g, ''); // Remove formatting
+    if (phoneNumber.length >= 7) { // Valid phone number
+      return { phoneNumber };
+    }
+  }
+  
+  // Pattern 2: "call/phone <name>"
+  const namePattern = /(?:call|phone)\s+([a-z\s]+)/i;
+  const nameMatch = text.match(namePattern);
+  if (nameMatch) {
+    const contactName = nameMatch[1].trim();
+    // Exclude common false positives
+    if (!['me', 'back', 'you', 'home', 'emergency'].includes(contactName.toLowerCase())) {
+      return { contactName };
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Detect if text is a phone call command
+ */
+export function isPhoneCallCommand(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /(?:call|phone|dial)\s+/i.test(lower);
 }

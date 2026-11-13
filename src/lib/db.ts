@@ -224,6 +224,17 @@ export async function getSessionTurns(session_id: string): Promise<Turn[]> {
 }
 
 /**
+ * Get all conversation turns from all sessions
+ */
+export async function getAllConversationTurns(limit: number = 100): Promise<Turn[]> {
+  const db = await getDb();
+  return db.getAllAsync<Turn>(
+    `SELECT * FROM conversation_turns ORDER BY timestamp DESC LIMIT ?`,
+    [limit]
+  );
+}
+
+/**
  * Forget — wipe all conversation turns for a session.
  * Messages and reminders are kept (they're facts, not chat history).
  */
