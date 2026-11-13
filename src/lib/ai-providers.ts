@@ -235,7 +235,7 @@ async function callOpenAIAPI(messages: AIMessage[]): Promise<string> {
         'Authorization': 'Bearer ' + API_KEYS.openai,
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...messages.filter(m => m.role !== 'system').map(m => ({

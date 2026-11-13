@@ -37,8 +37,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 export interface ReminderOptions {
+  id?: string;
   title: string;
-  time: Date;
+  time: Date | number;  // Can be Date object or timestamp
+  repeatInterval?: string | null;
 }
 
 /**
@@ -196,8 +198,11 @@ export function parseReminderFromSpeech(command: string): ReminderOptions | null
 export async function scheduleReminder(options: ReminderOptions): Promise<string> {
   console.log('[Reminders] scheduleReminder called:', options);
   
+  // Convert time to Date if it's a number
+  const time = typeof options.time === 'number' ? new Date(options.time) : options.time;
+  
   // Set the native Android alarm/notification
-  const result = await setReminder(options);
+  const result = await setReminder({ title: options.title, time });
   
   // Also save to database so it shows in reminders list
   try {
@@ -205,8 +210,8 @@ export async function scheduleReminder(options: ReminderOptions): Promise<string
     await saveReminder({
       title: options.title,
       body: '', // No body for voice reminders
-      fire_at: options.time.getTime(),
-      repeat_interval: null,
+      fire_at: time.getTime(),
+      repeat_interval: options.repeatInterval || null,
     });
     console.log('[Reminders] Saved to database');
   } catch (dbError) {
