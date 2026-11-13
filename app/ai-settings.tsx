@@ -20,7 +20,7 @@ import { saveAPIKey, loadAPIKeys } from '../src/config/api-keys';
 
 type ProviderKeys = {
   gemini: string[];
-  claude: string[];
+  deepseek: string[];
   openai: string[];
 };
 
@@ -28,12 +28,12 @@ export default function AISettingsScreen() {
   const [currentProvider, setCurrentProvider] = useState<AIProvider>(getAIProvider());
   const [keys, setKeys] = useState<ProviderKeys>({
     gemini: [],
-    claude: [],
+    deepseek: [],
     openai: [],
   });
   const [newKeys, setNewKeys] = useState({
     gemini: '',
-    claude: '',
+    deepseek: '',
     openai: '',
   });
   const [saved, setSaved] = useState(false);
@@ -45,19 +45,19 @@ export default function AISettingsScreen() {
   async function loadAllKeys() {
     console.log('[AI Settings] Loading all keys from storage...');
     const gemini = await loadAPIKeys('gemini');
-    const claude = await loadAPIKeys('claude');
+    const deepseek = await loadAPIKeys('deepseek');
     const openai = await loadAPIKeys('openai');
     
-    setKeys({ gemini, claude, openai });
+    setKeys({ gemini, deepseek, openai });
     
     console.log('[AI Settings] Loaded keys:', {
       gemini: `${gemini.length} key(s)`,
-      claude: `${claude.length} key(s)`,
+      deepseek: `${deepseek.length} key(s)`,
       openai: `${openai.length} key(s)`,
     });
   }
 
-  async function handleAddKey(provider: 'gemini' | 'claude' | 'openai') {
+  async function handleAddKey(provider: 'gemini' | 'deepseek' | 'openai') {
     const key = newKeys[provider].trim();
     
     if (!key || key.length < 10) {
@@ -106,7 +106,7 @@ export default function AISettingsScreen() {
     }
   }
 
-  async function handleRemoveKey(provider: 'gemini' | 'claude' | 'openai', index: number) {
+  async function handleRemoveKey(provider: 'gemini' | 'deepseek' | 'openai', index: number) {
     Alert.alert(
       'Remove Key?',
       `Remove ${provider.toUpperCase()} key #${index + 1}?${index === 0 ? ' (This is your PRIMARY key!)' : ''}`,
@@ -150,9 +150,9 @@ export default function AISettingsScreen() {
     setCurrentProvider(provider);
   }
 
-  function renderKeysList(provider: 'gemini' | 'claude' | 'openai', color: string, icon: string) {
+  function renderKeysList(provider: 'gemini' | 'deepseek' | 'openai', color: string, icon: string) {
     const providerKeys = keys[provider];
-    const displayName = provider === 'gemini' ? 'Gemini' : provider === 'claude' ? 'Claude' : 'OpenAI';
+    const displayName = provider === 'gemini' ? 'Gemini' : provider === 'deepseek' ? 'DeepSeek' : 'OpenAI';
     
     return (
       <View style={styles.keySection}>
@@ -206,7 +206,7 @@ export default function AISettingsScreen() {
 
         <Text style={styles.keyHint}>
           {provider === 'gemini' && '🔗 Get key at: makersuite.google.com/app/apikey'}
-          {provider === 'claude' && '🔗 Get key at: console.anthropic.com'}
+          {provider === 'deepseek' && '🔗 Get key at: platform.deepseek.com'}
           {provider === 'openai' && '🔗 Get key at: platform.openai.com/api-keys'}
         </Text>
       </View>
@@ -265,17 +265,17 @@ export default function AISettingsScreen() {
           </Pressable>
 
           <Pressable
-            style={[styles.providerCard, currentProvider === 'claude' && styles.selected]}
-            onPress={() => handleProviderChange('claude')}
+            style={[styles.providerCard, currentProvider === 'deepseek' && styles.selected]}
+            onPress={() => handleProviderChange('deepseek')}
           >
-            <Text style={styles.providerIcon}>🧠</Text>
+            <Text style={styles.providerIcon}>🤖</Text>
             <View style={styles.providerInfo}>
-              <Text style={styles.providerName}>Claude (Anthropic)</Text>
+              <Text style={styles.providerName}>DeepSeek</Text>
               <Text style={styles.providerDesc}>
-                Best reasoning • Thoughtful responses
+                Smart reasoning • Affordable • Open source focus
               </Text>
             </View>
-            {currentProvider === 'claude' && (
+            {currentProvider === 'deepseek' && (
               <Text style={styles.checkmark}>✓</Text>
             )}
           </Pressable>
@@ -316,7 +316,7 @@ export default function AISettingsScreen() {
           </Text>
 
           {renderKeysList('openai', '#10B981', '🚀')}
-          {renderKeysList('claude', '#8B5CF6', '🧠')}
+          {renderKeysList('deepseek', '#8B5CF6', '🤖')}
           {renderKeysList('gemini', '#3B82F6', '⚡')}
         </View>
 
@@ -332,9 +332,9 @@ export default function AISettingsScreen() {
           </View>
 
           <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Claude:</Text>
-            <Text style={keys.claude.length > 0 ? styles.statusReady : styles.statusNotConfigured}>
-              {keys.claude.length > 0 ? `✓ ${keys.claude.length} key(s)` : '○ No keys'}
+            <Text style={styles.statusLabel}>DeepSeek:</Text>
+            <Text style={keys.deepseek.length > 0 ? styles.statusReady : styles.statusNotConfigured}>
+              {keys.deepseek.length > 0 ? `✓ ${keys.deepseek.length} key(s)` : '○ No keys'}
             </Text>
           </View>
 

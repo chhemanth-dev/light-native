@@ -13,11 +13,11 @@ import { setAPIKey, addAPIKey } from '../lib/ai-providers';
 
 export function initializeMyAPIKeys() {
   // OPTION 1: Set your PRIMARY key (first key = always tried first)
-  // setAPIKey('claude', 'YOUR_PRIMARY_CLAUDE_KEY');
+  // setAPIKey('deepseek', 'YOUR_PRIMARY_DEEPSEEK_KEY');
   
   // OPTION 2: Add BACKUP keys (used if primary fails)
-  // addAPIKey('claude', 'YOUR_BACKUP_CLAUDE_KEY_1');
-  // addAPIKey('claude', 'YOUR_BACKUP_CLAUDE_KEY_2');
+  // addAPIKey('deepseek', 'YOUR_BACKUP_DEEPSEEK_KEY_1');
+  // addAPIKey('deepseek', 'YOUR_BACKUP_DEEPSEEK_KEY_2');
   
   // Same for OpenAI
   // setAPIKey('openai', 'YOUR_PRIMARY_OPENAI_KEY');
@@ -37,11 +37,11 @@ export async function loadSavedAPIKeys() {
   console.log('[API Keys] Loading saved keys from secure storage...');
   const keys = await initializeAllAPIKeys();
   
-  // Load Claude keys
-  if (keys.claude.length > 0) {
-    setAPIKey('claude', keys.claude[0]); // Primary key
-    keys.claude.slice(1).forEach(key => addAPIKey('claude', key)); // Backup keys
-    console.log(`[API Keys] Loaded ${keys.claude.length} Claude key(s)`);
+  // Load DeepSeek keys
+  if (keys.deepseek.length > 0) {
+    setAPIKey('deepseek', keys.deepseek[0]); // Primary key
+    keys.deepseek.slice(1).forEach(key => addAPIKey('deepseek', key)); // Backup keys
+    console.log(`[API Keys] Loaded ${keys.deepseek.length} DeepSeek key(s)`);
   }
   
   // Load OpenAI keys

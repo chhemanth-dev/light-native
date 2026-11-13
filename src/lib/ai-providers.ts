@@ -4,7 +4,7 @@
  * 100% Cloud-based - NO on-device AI
  */
 
-export type AIProvider = 'gemini' | 'claude' | 'openai' | 'auto';
+export type AIProvider = 'gemini' | 'deepseek' | 'openai' | 'auto';
 
 export type AIMessage = {
   role: "user" | "assistant" | "system";
@@ -21,39 +21,39 @@ export type AIResponse = {
 // Now supports MULTIPLE keys per provider for auto-fallback
 const API_KEYS: {
   gemini: string[];
-  claude: string[];
+  deepseek: string[];
   openai: string[];
 } = {
   gemini: [],
-  claude: [],
+  deepseek: [],
   openai: [],
 };
 
 // Track which key index is currently being used (resets after full cycle)
 const CURRENT_KEY_INDEX: {
   gemini: number;
-  claude: number;
+  deepseek: number;
   openai: number;
 } = {
   gemini: 0,
-  claude: 0,
+  deepseek: 0,
   openai: 0,
 };
 
 // Track if we've tried all keys (to prevent infinite rotation)
 const TRIED_ALL_KEYS: {
   gemini: boolean;
-  claude: boolean;
+  deepseek: boolean;
   openai: boolean;
 } = {
   gemini: false,
-  claude: false,
+  deepseek: false,
   openai: false,
 };
 
 const API_URLS = {
   gemini: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-  claude: "https://api.anthropic.com/v1/messages",
+  deepseek: "https://api.deepseek.com/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
 };
 
@@ -166,42 +166,44 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
 }
 
 /**
- * Call Claude API (Anthropic)
+ * Call DeepSeek API
  */
-async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
-  console.log('[Claude] Starting API call...');
+async function callDeepSeekAPI(messages: AIMessage[]): Promise<string> {
+  console.log('[DeepSeek] Starting API call...');
   
-  const apiKey = getCurrentKey('claude');
+  const apiKey = getCurrentKey('deepseek');
   if (!apiKey) {
-    throw new Error('Claude API key not configured');
+    throw new Error('DeepSeek API key not configured');
   }
   
-  console.log('[Claude] Using key:', `${apiKey.substring(0, 15)}...`);
-  console.log('[Claude] Messages count:', messages.length);
+  console.log('[DeepSeek] Using key:', `${apiKey.substring(0, 15)}...`);
+  console.log('[DeepSeek] Messages count:', messages.length);
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   
   try {
     const requestBody = {
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...messages.filter(m => m.role !== 'system').map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+      ],
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: messages.filter(m => m.role !== 'system').map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      })),
+      temperature: 0.7,
     };
     
-    console.log('[Claude] Request body:', JSON.stringify(requestBody).substring(0, 200));
-    console.log('[Claude] Calling API:', API_URLS.claude);
+    console.log('[DeepSeek] Request body:', JSON.stringify(requestBody).substring(0, 200));
+    console.log('[DeepSeek] Calling API:', API_URLS.deepseek);
     
-    const response = await fetch(API_URLS.claude, {
+    const response = await fetch(API_URLS.deepseek, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
@@ -209,29 +211,29 @@ async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
 
     clearTimeout(timeoutId);
     
-    console.log('[Claude] Response status:', response.status);
+    console.log('[DeepSeek] Response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Claude] API error response:', errorText);
-      throw new Error('Claude API error: ' + response.status + ' - ' + errorText);
+      console.error('[DeepSeek] API error response:', errorText);
+      throw new Error('DeepSeek API error: ' + response.status + ' - ' + errorText);
     }
 
     const data = await response.json();
-    console.log('[Claude] Response data keys:', Object.keys(data));
+    console.log('[DeepSeek] Response data keys:', Object.keys(data));
     
-    const text = data.content?.[0]?.text;
+    const text = data.choices?.[0]?.message?.content;
     
     if (!text) {
-      console.error('[Claude] No text in response:', JSON.stringify(data).substring(0, 200));
-      throw new Error('No response from Claude API');
+      console.error('[DeepSeek] No text in response:', JSON.stringify(data).substring(0, 200));
+      throw new Error('No response from DeepSeek API');
     }
 
-    console.log('[Claude] ✅ Success! Response length:', text.length);
+    console.log('[DeepSeek] ✅ Success! Response length:', text.length);
     return text.trim();
   } catch (error: any) {
-    console.error('[Claude] ❌ Error:', error.message || error);
-    console.error('[Claude] Error stack:', error.stack);
+    console.error('[DeepSeek] ❌ Error:', error.message || error);
+    console.error('[DeepSeek] Error stack:', error.stack);
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -313,11 +315,11 @@ export async function callAI(
   console.log('[AI] Messages:', messages.length);
   console.log('[AI] API Keys status:');
   console.log('[AI]   - Gemini:', API_KEYS.gemini.length, 'key(s)');
-  console.log('[AI]   - Claude:', API_KEYS.claude.length, 'key(s)');
+  console.log('[AI]   - DeepSeek:', API_KEYS.deepseek.length, 'key(s)');
   console.log('[AI]   - OpenAI:', API_KEYS.openai.length, 'key(s)');
   
   // Check if ANY key is configured
-  if (API_KEYS.gemini.length === 0 && API_KEYS.claude.length === 0 && API_KEYS.openai.length === 0) {
+  if (API_KEYS.gemini.length === 0 && API_KEYS.deepseek.length === 0 && API_KEYS.openai.length === 0) {
     console.error('[AI] ❌ NO API KEYS CONFIGURED!');
     throw new Error('No API keys configured. Please set at least one API key in Settings → AI Settings');
   }
@@ -326,7 +328,7 @@ export async function callAI(
   
   // Auto mode: try providers in order of preference
   if (provider === 'auto') {
-    const providers: AIProvider[] = ['openai', 'claude', 'gemini'];
+    const providers: AIProvider[] = ['openai', 'deepseek', 'gemini'];
     const allErrors: string[] = [];
     
     for (const p of providers) {
@@ -457,8 +459,8 @@ async function callProviderAPI(provider: AIProvider, messages: AIMessage[]): Pro
   switch (provider) {
     case 'gemini':
       return await callGeminiAPI(messages);
-    case 'claude':
-      return await callClaudeAPI(messages);
+    case 'deepseek':
+      return await callDeepSeekAPI(messages);
     case 'openai':
       return await callOpenAIAPI(messages);
     default:

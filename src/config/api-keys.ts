@@ -14,14 +14,14 @@ import { Platform } from 'react-native';
 // Secure key storage keys
 const STORAGE_KEYS = {
   GEMINI: 'light_gemini_api_key',
-  CLAUDE: 'light_claude_api_key',
+  DEEPSEEK: 'light_deepseek_api_key',
   OPENAI: 'light_openai_api_key',
 };
 
 /**
  * Save API keys securely (supports multiple keys as array)
  */
-export async function saveAPIKey(provider: 'gemini' | 'claude' | 'openai', keys: string | string[]): Promise<void> {
+export async function saveAPIKey(provider: 'gemini' | 'deepseek' | 'openai', keys: string | string[]): Promise<void> {
   // Convert single key to array for consistency
   const keyArray = Array.isArray(keys) ? keys : [keys];
   const jsonKeys = JSON.stringify(keyArray);
@@ -42,7 +42,7 @@ export async function saveAPIKey(provider: 'gemini' | 'claude' | 'openai', keys:
 /**
  * Load API keys from secure storage (returns array for multiple keys support)
  */
-export async function loadAPIKey(provider: 'gemini' | 'claude' | 'openai'): Promise<string | null> {
+export async function loadAPIKey(provider: 'gemini' | 'deepseek' | 'openai'): Promise<string | null> {
   try {
     let stored: string | null;
     if (Platform.OS === 'web') {
@@ -77,7 +77,7 @@ export async function loadAPIKey(provider: 'gemini' | 'claude' | 'openai'): Prom
 /**
  * Load all API keys as arrays (for rotation system)
  */
-export async function loadAPIKeys(provider: 'gemini' | 'claude' | 'openai'): Promise<string[]> {
+export async function loadAPIKeys(provider: 'gemini' | 'deepseek' | 'openai'): Promise<string[]> {
   try {
     let stored: string | null;
     if (Platform.OS === 'web') {
@@ -113,7 +113,7 @@ export async function loadAPIKeys(provider: 'gemini' | 'claude' | 'openai'): Pro
 /**
  * Delete API key from secure storage
  */
-export async function deleteAPIKey(provider: 'gemini' | 'claude' | 'openai'): Promise<void> {
+export async function deleteAPIKey(provider: 'gemini' | 'deepseek' | 'openai'): Promise<void> {
   try {
     if (Platform.OS === 'web') {
       localStorage.removeItem(STORAGE_KEYS[provider.toUpperCase() as keyof typeof STORAGE_KEYS]);
@@ -132,34 +132,34 @@ export async function deleteAPIKey(provider: 'gemini' | 'claude' | 'openai'): Pr
  * Initialize API keys from secure storage
  * Call this at app startup
  */
-export async function initializeAPIKeys(): Promise<{gemini: string | null, claude: string | null, openai: string | null}> {
+export async function initializeAPIKeys(): Promise<{gemini: string | null, deepseek: string | null, openai: string | null}> {
   const gemini = await loadAPIKey('gemini');
-  const claude = await loadAPIKey('claude');
+  const deepseek = await loadAPIKey('deepseek');
   const openai = await loadAPIKey('openai');
   
   console.log('[API Keys] Initialized:', {
     gemini: gemini ? '✓ Configured' : '✗ Not set',
-    claude: claude ? '✓ Configured' : '✗ Not set',
+    deepseek: deepseek ? '✓ Configured' : '✗ Not set',
     openai: openai ? '✓ Configured' : '✗ Not set',
   });
   
-  return { gemini, claude, openai };
+  return { gemini, deepseek, openai };
 }
 
 /**
  * Initialize all API keys as arrays (for rotation system)
  * Call this at app startup for multi-key support
  */
-export async function initializeAllAPIKeys(): Promise<{gemini: string[], claude: string[], openai: string[]}> {
+export async function initializeAllAPIKeys(): Promise<{gemini: string[], deepseek: string[], openai: string[]}> {
   const gemini = await loadAPIKeys('gemini');
-  const claude = await loadAPIKeys('claude');
+  const deepseek = await loadAPIKeys('deepseek');
   const openai = await loadAPIKeys('openai');
   
   console.log('[API Keys] Initialized (multi-key):', {
     gemini: `${gemini.length} key(s)`,
-    claude: `${claude.length} key(s)`,
+    deepseek: `${deepseek.length} key(s)`,
     openai: `${openai.length} key(s)`,
   });
   
-  return { gemini, claude, openai };
+  return { gemini, deepseek, openai };
 }
