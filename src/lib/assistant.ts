@@ -17,6 +17,7 @@ import {
   refreshInstalledAppsCache
 } from "./local-parser";
 import { openApp, makePhoneCall } from "./accessibility";
+import { executeActionsFromAIResponse, shouldExecuteActions } from "./action-executor";
 
 export type AssistantState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -117,6 +118,20 @@ export class LightAssistant {
 
       if (this.history.length > 20) {
         this.history = this.history.slice(-20);
+      }
+
+      // Execute any actions mentioned in AI response
+      if (shouldExecuteActions(text)) {
+        console.log("[Assistant] 🎯 AI response contains action commands - executing...");
+        try {
+          const actions = await executeActionsFromAIResponse(userText, text);
+          const successfulActions = actions.filter(a => a.success && a.type !== 'none');
+          if (successfulActions.length > 0) {
+            console.log("[Assistant] ✅ Executed", successfulActions.length, "action(s) from AI response");
+          }
+        } catch (error) {
+          console.error("[Assistant] ❌ Failed to execute actions from AI response:", error);
+        }
       }
 
       await this.respond(text, offline);
