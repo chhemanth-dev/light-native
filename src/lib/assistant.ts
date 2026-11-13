@@ -119,12 +119,25 @@ export class LightAssistant {
 
       await this.respond(text, offline);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      let msg = e instanceof Error ? e.message : "Something went wrong.";
       console.error("[Assistant] ❌ ERROR:", msg);
       console.error("[Assistant] Error details:", e);
+      
+      // Parse specific error types for user-friendly messages
+      if (msg.includes('credit_balance_exhausted') || msg.includes('insufficient_quota')) {
+        msg = "Your API key has run out of credits. Please add a new key or add credits to your account in AI Settings.";
+      } else if (msg.includes('invalid_api_key') || msg.includes('authentication')) {
+        msg = "API key is invalid or expired. Please update your API key in AI Settings.";
+      } else if (msg.includes('No API keys configured')) {
+        msg = "No API keys found. Please add at least one API key in Settings → AI Settings.";
+      } else if (msg.includes('failed with all') && msg.includes('key(s)')) {
+        // Extract provider and key count from error message
+        msg = "All your API keys have failed. Please check your keys in AI Settings or add new ones.";
+      }
+      
       this.setState("error");
       this.emit({ type: "error", message: msg });
-      setTimeout(() => this.setState("idle"), 2000);
+      setTimeout(() => this.setState("idle"), 3000); // Increased timeout for longer messages
     }
   }
 
