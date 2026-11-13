@@ -29,7 +29,7 @@ const API_KEYS: {
   openai: [],
 };
 
-// Track which key index is currently being used
+// Track which key index is currently being used (resets after full cycle)
 const CURRENT_KEY_INDEX: {
   gemini: number;
   claude: number;
@@ -38,6 +38,17 @@ const CURRENT_KEY_INDEX: {
   gemini: 0,
   claude: 0,
   openai: 0,
+};
+
+// Track if we've tried all keys (to prevent infinite rotation)
+const TRIED_ALL_KEYS: {
+  gemini: boolean;
+  claude: boolean;
+  openai: boolean;
+} = {
+  gemini: false,
+  claude: false,
+  openai: false,
 };
 
 const API_URLS = {
@@ -316,60 +327,127 @@ export async function callAI(
   // Auto mode: try providers in order of preference
   if (provider === 'auto') {
     const providers: AIProvider[] = ['openai', 'claude', 'gemini'];
-    const errors: string[] = [];
+    const allErrors: string[] = [];
     
     for (const p of providers) {
       const typedProvider = p as Exclude<AIProvider, 'auto'>;
       
-      // Skip if key not configured
+      // Skip if no keys configured
       if (!isProviderConfigured(typedProvider)) {
         console.log('[AI] ⏭️  Skipping', p, '- no API key configured');
         continue;
       }
       
+      // Reset rotation for this provider (try all its keys)
+      resetRotation(typedProvider);
+      
       // Try all keys for this provider
       const numKeys = API_KEYS[typedProvider].length;
       for (let attempt = 0; attempt < numKeys; attempt++) {
         try {
-          console.log('[AI] 🔄 Trying provider:', p, '- Key', attempt + 1, 'of', numKeys);
+          const currentKey = getCurrentKey(typedProvider);
+          if (!currentKey) {
+            console.log('[AI] No more keys to try for', p);
+            break;
+          }
+          
+          console.log('[AI] 🔄 Trying', p, '- Key', attempt + 1, 'of', numKeys, '(' + currentKey.substring(0, 15) + '...)');
           const text = await callProviderAPI(p, messages);
-          console.log('[AI] ✅ SUCCESS with provider:', p);
+          console.log('[AI] ✅ SUCCESS with', p, 'key', attempt + 1);
+          
+          // Success! Reset rotation for next time
+          resetRotation(typedProvider);
           return { text, provider: p, offline: false };
         } catch (error: any) {
           const errorMsg = error.message || String(error);
-          console.error('[AI] ❌ Provider', p, 'key', attempt + 1, 'failed:', errorMsg);
-          errors.push(`${p} key ${attempt + 1}: ${errorMsg}`);
+          console.error('[AI] ❌', p, 'key', attempt + 1, 'failed:', errorMsg);
+          allErrors.push(`${p} key ${attempt + 1}/${numKeys}: ${errorMsg}`);
           
-          // Rotate to next key for this provider
+          // Rotate to next key (if any left)
           if (attempt < numKeys - 1) {
-            rotateAPIKey(typedProvider);
+            const hasMore = rotateAPIKey(typedProvider);
+            if (!hasMore) {
+              console.log('[AI] All keys exhausted for', p);
+              break;
+            }
           }
         }
       }
+      
+      // Reset for next provider attempt
+      resetRotation(typedProvider);
     }
     
     // All providers and all their keys failed
     console.error('[AI] ❌ ALL PROVIDERS AND ALL KEYS FAILED!');
-    console.error('[AI] Errors:', errors);
-    throw new Error('All AI providers failed:\n' + errors.join('\n'));
+    console.error('[AI] Total errors:', allErrors.length);
+    
+    throw new Error(
+      'All AI providers failed. Tried ' + allErrors.length + ' key(s):\n' + 
+      allErrors.slice(0, 3).join('\n') + 
+      (allErrors.length > 3 ? '\n... and ' + (allErrors.length - 3) + ' more' : '') +
+      '\n\nPlease check:\n' +
+      '1. API keys are valid\n' +
+      '2. Accounts have credit balance\n' +
+      '3. Internet connection is working\n' +
+      '4. Go to Settings → AI Settings to update keys'
+    );
   }
   
   // Specific provider requested
   console.log('[AI] Using specific provider:', provider);
   
+  const typedProvider = provider as Exclude<AIProvider, 'auto'>;
+  
   // Check if provider is configured
-  if (!isProviderConfigured(provider as Exclude<AIProvider, 'auto'>)) {
-    throw new Error(`${provider} API key not configured. Please add it to init-api-keys.local.ts`);
+  if (!isProviderConfigured(typedProvider)) {
+    throw new Error(`${provider} has no API keys configured. Please add keys in Settings → AI Settings`);
   }
   
-  try {
-    const text = await callProviderAPI(provider, messages);
-    console.log('[AI] ✅ SUCCESS with provider:', provider);
-    return { text, provider, offline: false };
-  } catch (error: any) {
-    console.error('[AI] ❌ Provider failed:', error.message || error);
-    throw new Error(`${provider} API failed: ${error.message}`);
+  // Reset rotation
+  resetRotation(typedProvider);
+  
+  // Try all keys for this specific provider
+  const numKeys = API_KEYS[typedProvider].length;
+  const errors: string[] = [];
+  
+  for (let attempt = 0; attempt < numKeys; attempt++) {
+    const currentKey = getCurrentKey(typedProvider);
+    if (!currentKey) {
+      console.log('[AI] No more keys to try for', provider);
+      break;
+    }
+    
+    try {
+      console.log('[AI] 🔄 Trying', provider, 'key', attempt + 1, 'of', numKeys);
+      const text = await callProviderAPI(provider, messages);
+      console.log('[AI] ✅ SUCCESS with', provider, 'key', attempt + 1);
+      
+      // Success! Reset for next time
+      resetRotation(typedProvider);
+      return { text, provider, offline: false };
+    } catch (error: any) {
+      const errorMsg = error.message || String(error);
+      console.error('[AI] ❌', provider, 'key', attempt + 1, 'failed:', errorMsg);
+      errors.push(`Key ${attempt + 1}/${numKeys}: ${errorMsg}`);
+      
+      // Try next key if available
+      if (attempt < numKeys - 1) {
+        rotateAPIKey(typedProvider);
+      }
+    }
   }
+  
+  // All keys failed for this provider
+  resetRotation(typedProvider);
+  throw new Error(
+    `${provider} failed with all ${numKeys} key(s):\n` + 
+    errors.join('\n') +
+    '\n\nPlease:\n' +
+    '1. Check if keys are valid\n' +
+    '2. Verify account has credit balance\n' +
+    '3. Update keys in Settings → AI Settings'
+  );
 }
 
 /**
@@ -408,34 +486,44 @@ function buildPrompt(messages: AIMessage[]): string {
 
 /**
  * Update API key at runtime
- * Now supports adding multiple keys - they will be tried in order
+ * First key in array is PRIMARY and will always be tried first
  */
 export function setAPIKey(provider: Exclude<AIProvider, 'auto'>, key: string | string[]) {
   if (Array.isArray(key)) {
     API_KEYS[provider] = key.filter(k => k && k.length > 10);
   } else {
-    // Single key - replace all existing keys
+    // Single key - replace all existing keys (becomes primary)
     API_KEYS[provider] = key && key.length > 10 ? [key] : [];
   }
-  console.log('[AI] Updated API keys for:', provider, '- Count:', API_KEYS[provider].length);
+  // Reset to primary key (index 0)
+  CURRENT_KEY_INDEX[provider] = 0;
+  TRIED_ALL_KEYS[provider] = false;
+  console.log('[AI] Updated API keys for:', provider, '- Count:', API_KEYS[provider].length, '(Primary:', API_KEYS[provider][0]?.substring(0, 15) + '...)');
 }
 
 /**
- * Add an additional API key to existing ones
+ * Add an additional API key to existing ones (as backup)
  */
 export function addAPIKey(provider: Exclude<AIProvider, 'auto'>, key: string) {
   if (key && key.length > 10 && !API_KEYS[provider].includes(key)) {
     API_KEYS[provider].push(key);
-    console.log('[AI] Added API key for:', provider, '- Total:', API_KEYS[provider].length);
+    console.log('[AI] Added backup API key for:', provider, '- Total:', API_KEYS[provider].length);
   }
 }
 
 /**
- * Get current API key for provider (cycles through keys on failure)
+ * Get current API key for provider
+ * Returns null if all keys have been tried and failed
  */
 function getCurrentKey(provider: Exclude<AIProvider, 'auto'>): string | null {
   const keys = API_KEYS[provider];
   if (keys.length === 0) return null;
+  
+  // If we've tried all keys in this cycle, return null to stop
+  if (TRIED_ALL_KEYS[provider]) {
+    console.log('[AI] All keys for', provider, 'have been tried - stopping rotation');
+    return null;
+  }
   
   const index = CURRENT_KEY_INDEX[provider] % keys.length;
   return keys[index];
@@ -443,11 +531,32 @@ function getCurrentKey(provider: Exclude<AIProvider, 'auto'>): string | null {
 
 /**
  * Move to next API key for provider (call this on failure)
+ * Returns false if we've cycled through all keys
  */
-function rotateAPIKey(provider: Exclude<AIProvider, 'auto'>) {
+function rotateAPIKey(provider: Exclude<AIProvider, 'auto'>): boolean {
+  const keys = API_KEYS[provider];
+  if (keys.length === 0) return false;
+  
   CURRENT_KEY_INDEX[provider]++;
-  const newIndex = CURRENT_KEY_INDEX[provider] % API_KEYS[provider].length;
-  console.log('[AI] Rotated to next key for:', provider, '- Index:', newIndex);
+  const newIndex = CURRENT_KEY_INDEX[provider] % keys.length;
+  
+  // If we're back at index 0, we've tried all keys
+  if (newIndex === 0) {
+    TRIED_ALL_KEYS[provider] = true;
+    console.log('[AI] ⚠️ Cycled through all', keys.length, 'keys for', provider, '- all failed');
+    return false;
+  }
+  
+  console.log('[AI] Rotated to backup key for:', provider, '- Key', newIndex + 1, 'of', keys.length);
+  return true;
+}
+
+/**
+ * Reset rotation state (call this on successful request)
+ */
+function resetRotation(provider: Exclude<AIProvider, 'auto'>) {
+  CURRENT_KEY_INDEX[provider] = 0;
+  TRIED_ALL_KEYS[provider] = false;
 }
 
 /**
@@ -455,4 +564,22 @@ function rotateAPIKey(provider: Exclude<AIProvider, 'auto'>) {
  */
 export function isProviderConfigured(provider: Exclude<AIProvider, 'auto'>): boolean {
   return API_KEYS[provider].length > 0;
+}
+
+/**
+ * Get count of configured keys for a provider
+ */
+export function getKeyCount(provider: Exclude<AIProvider, 'auto'>): number {
+  return API_KEYS[provider].length;
+}
+
+/**
+ * Get all configured providers with key counts
+ */
+export function getConfiguredProviders(): Array<{provider: string, keyCount: number}> {
+  return [
+    { provider: 'openai', keyCount: API_KEYS.openai.length },
+    { provider: 'claude', keyCount: API_KEYS.claude.length },
+    { provider: 'gemini', keyCount: API_KEYS.gemini.length },
+  ].filter(p => p.keyCount > 0);
 }
