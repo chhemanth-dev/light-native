@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     borderColor: "#1E293B",
   },
   voiceHintText: { color: "#475569", fontSize: 12 },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
+  list: { padding: 16, gap: 10, paddingBottom: 100 },
   card: {
     backgroundColor: "#0A0F1E",
     borderRadius: 14,
