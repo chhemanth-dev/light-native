@@ -18,14 +18,26 @@ export type AIResponse = {
 };
 
 // API Keys - MOVED TO SECURE STORAGE
-// For development, create a .env file or use Expo SecureStore
-// For production, use environment variables
+// Now supports MULTIPLE keys per provider for auto-fallback
+const API_KEYS: {
+  gemini: string[];
+  claude: string[];
+  openai: string[];
+} = {
+  gemini: [],
+  claude: [],
+  openai: [],
+};
 
-// Load from environment or use empty defaults
-const API_KEYS = {
-  gemini: "", // Get from https://makersuite.google.com/app/apikey (FREE)
-  claude: "", // Set via setAPIKey() or environment variable
-  openai: "", // Set via setAPIKey() or environment variable
+// Track which key index is currently being used
+const CURRENT_KEY_INDEX: {
+  gemini: number;
+  claude: number;
+  openai: number;
+} = {
+  gemini: 0,
+  claude: 0,
+  openai: 0,
 };
 
 const API_URLS = {
@@ -101,7 +113,7 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   
   try {
-    const apiUrl = API_URLS.gemini + '?key=' + API_KEYS.gemini;
+    const apiUrl = API_URLS.gemini + '?key=' + getCurrentKey('gemini');
     console.log('[Gemini] Calling API:', API_URLS.gemini);
     
     const response = await fetch(apiUrl, {
@@ -147,12 +159,13 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
  */
 async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
   console.log('[Claude] Starting API call...');
-  console.log('[Claude] API Key:', API_KEYS.claude ? `✓ Present (${API_KEYS.claude.substring(0, 15)}...)` : '✗ Missing');
   
-  if (!API_KEYS.claude) {
+  const apiKey = getCurrentKey('claude');
+  if (!apiKey) {
     throw new Error('Claude API key not configured');
   }
   
+  console.log('[Claude] Using key:', `${apiKey.substring(0, 15)}...`);
   console.log('[Claude] Messages count:', messages.length);
   
   const controller = new AbortController();
@@ -176,7 +189,7 @@ async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': API_KEYS.claude,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(requestBody),
@@ -218,11 +231,14 @@ async function callClaudeAPI(messages: AIMessage[]): Promise<string> {
  * Call OpenAI API
  */
 async function callOpenAIAPI(messages: AIMessage[]): Promise<string> {
-  if (!API_KEYS.openai) {
+  console.log('[OpenAI] Starting API call...');
+  
+  const apiKey = getCurrentKey('openai');
+  if (!apiKey) {
     throw new Error('OpenAI API key not configured');
   }
   
-  console.log('[OpenAI] Starting API call...');
+  console.log('[OpenAI] Using key:', `${apiKey.substring(0, 20)}...`);
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -232,7 +248,7 @@ async function callOpenAIAPI(messages: AIMessage[]): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + API_KEYS.openai,
+        'Authorization': 'Bearer ' + apiKey,
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -285,45 +301,55 @@ export async function callAI(
   console.log('[AI] Provider:', provider);
   console.log('[AI] Messages:', messages.length);
   console.log('[AI] API Keys status:');
-  console.log('[AI]   - Gemini:', API_KEYS.gemini ? '✓' : '✗ MISSING');
-  console.log('[AI]   - Claude:', API_KEYS.claude ? '✓' : '✗');
-  console.log('[AI]   - OpenAI:', API_KEYS.openai ? '✓' : '✗');
+  console.log('[AI]   - Gemini:', API_KEYS.gemini.length, 'key(s)');
+  console.log('[AI]   - Claude:', API_KEYS.claude.length, 'key(s)');
+  console.log('[AI]   - OpenAI:', API_KEYS.openai.length, 'key(s)');
   
   // Check if ANY key is configured
-  if (!API_KEYS.gemini && !API_KEYS.claude && !API_KEYS.openai) {
+  if (API_KEYS.gemini.length === 0 && API_KEYS.claude.length === 0 && API_KEYS.openai.length === 0) {
     console.error('[AI] ❌ NO API KEYS CONFIGURED!');
-    throw new Error('No API keys configured. Please set at least one API key in init-api-keys.local.ts');
+    throw new Error('No API keys configured. Please set at least one API key in Settings → AI Settings');
   }
   
   console.log('[AI] ========================================');
   
   // Auto mode: try providers in order of preference
   if (provider === 'auto') {
-    const providers: AIProvider[] = ['gemini', 'claude', 'openai'];
+    const providers: AIProvider[] = ['openai', 'claude', 'gemini'];
     const errors: string[] = [];
     
     for (const p of providers) {
+      const typedProvider = p as Exclude<AIProvider, 'auto'>;
+      
       // Skip if key not configured
-      if (!isProviderConfigured(p as Exclude<AIProvider, 'auto'>)) {
+      if (!isProviderConfigured(typedProvider)) {
         console.log('[AI] ⏭️  Skipping', p, '- no API key configured');
         continue;
       }
       
-      try {
-        console.log('[AI] 🔄 Trying provider:', p);
-        const text = await callProviderAPI(p, messages);
-        console.log('[AI] ✅ SUCCESS with provider:', p);
-        return { text, provider: p, offline: false };
-      } catch (error: any) {
-        const errorMsg = error.message || String(error);
-        console.error('[AI] ❌ Provider', p, 'failed:', errorMsg);
-        errors.push(`${p}: ${errorMsg}`);
-        // Try next provider
+      // Try all keys for this provider
+      const numKeys = API_KEYS[typedProvider].length;
+      for (let attempt = 0; attempt < numKeys; attempt++) {
+        try {
+          console.log('[AI] 🔄 Trying provider:', p, '- Key', attempt + 1, 'of', numKeys);
+          const text = await callProviderAPI(p, messages);
+          console.log('[AI] ✅ SUCCESS with provider:', p);
+          return { text, provider: p, offline: false };
+        } catch (error: any) {
+          const errorMsg = error.message || String(error);
+          console.error('[AI] ❌ Provider', p, 'key', attempt + 1, 'failed:', errorMsg);
+          errors.push(`${p} key ${attempt + 1}: ${errorMsg}`);
+          
+          // Rotate to next key for this provider
+          if (attempt < numKeys - 1) {
+            rotateAPIKey(typedProvider);
+          }
+        }
       }
     }
     
-    // All providers failed
-    console.error('[AI] ❌ ALL PROVIDERS FAILED!');
+    // All providers and all their keys failed
+    console.error('[AI] ❌ ALL PROVIDERS AND ALL KEYS FAILED!');
     console.error('[AI] Errors:', errors);
     throw new Error('All AI providers failed:\n' + errors.join('\n'));
   }
@@ -382,15 +408,51 @@ function buildPrompt(messages: AIMessage[]): string {
 
 /**
  * Update API key at runtime
+ * Now supports adding multiple keys - they will be tried in order
  */
-export function setAPIKey(provider: Exclude<AIProvider, 'auto'>, key: string) {
-  API_KEYS[provider] = key;
-  console.log('[AI] Updated API key for:', provider);
+export function setAPIKey(provider: Exclude<AIProvider, 'auto'>, key: string | string[]) {
+  if (Array.isArray(key)) {
+    API_KEYS[provider] = key.filter(k => k && k.length > 10);
+  } else {
+    // Single key - replace all existing keys
+    API_KEYS[provider] = key && key.length > 10 ? [key] : [];
+  }
+  console.log('[AI] Updated API keys for:', provider, '- Count:', API_KEYS[provider].length);
+}
+
+/**
+ * Add an additional API key to existing ones
+ */
+export function addAPIKey(provider: Exclude<AIProvider, 'auto'>, key: string) {
+  if (key && key.length > 10 && !API_KEYS[provider].includes(key)) {
+    API_KEYS[provider].push(key);
+    console.log('[AI] Added API key for:', provider, '- Total:', API_KEYS[provider].length);
+  }
+}
+
+/**
+ * Get current API key for provider (cycles through keys on failure)
+ */
+function getCurrentKey(provider: Exclude<AIProvider, 'auto'>): string | null {
+  const keys = API_KEYS[provider];
+  if (keys.length === 0) return null;
+  
+  const index = CURRENT_KEY_INDEX[provider] % keys.length;
+  return keys[index];
+}
+
+/**
+ * Move to next API key for provider (call this on failure)
+ */
+function rotateAPIKey(provider: Exclude<AIProvider, 'auto'>) {
+  CURRENT_KEY_INDEX[provider]++;
+  const newIndex = CURRENT_KEY_INDEX[provider] % API_KEYS[provider].length;
+  console.log('[AI] Rotated to next key for:', provider, '- Index:', newIndex);
 }
 
 /**
  * Check if provider is configured
  */
 export function isProviderConfigured(provider: Exclude<AIProvider, 'auto'>): boolean {
-  return !!API_KEYS[provider];
+  return API_KEYS[provider].length > 0;
 }
