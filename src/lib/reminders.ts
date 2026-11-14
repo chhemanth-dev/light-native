@@ -44,7 +44,7 @@ export interface ReminderOptions {
 }
 
 /**
- * Set a reminder/alarm
+ * Set a reminder/alarm with voice feedback
  */
 export async function setReminder(options: ReminderOptions): Promise<string> {
   if (!isReminderModuleAvailable()) {
@@ -58,10 +58,43 @@ export async function setReminder(options: ReminderOptions): Promise<string> {
   try {
     const result = await ReminderModule.setReminder(options.title, timestampMillis);
     console.log('[Reminders] Success:', result);
+    
+    // Voice confirmation
+    const { speak } = require('./voice');
+    const timeDesc = formatTimeForSpeech(new Date(timestampMillis));
+    speak(`Reminder set for ${timeDesc}: ${options.title}`);
+    
     return result;
   } catch (error) {
     console.error('[Reminders] Failed:', error);
     throw error;
+  }
+}
+
+/**
+ * Format time for speech output
+ */
+function formatTimeForSpeech(time: Date): string {
+  const now = new Date();
+  const diffMs = time.getTime() - now.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  const diffHours = Math.round(diffMs / 3600000);
+  const diffDays = Math.round(diffMs / 86400000);
+  
+  if (diffMins < 60) {
+    return `${diffMins} minute${diffMins !== 1 ? 's' : ''}`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+  } else if (diffDays === 1) {
+    return `tomorrow at ${time.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+  } else {
+    return time.toLocaleString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
   }
 }
 

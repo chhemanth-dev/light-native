@@ -62,10 +62,19 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS contacts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      phoneNumber TEXT NOT NULL,
+      email TEXT,
+      createdAt INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(read);
     CREATE INDEX IF NOT EXISTS idx_reminders_fire_at ON reminders(fire_at);
     CREATE INDEX IF NOT EXISTS idx_turns_session ON conversation_turns(session_id);
+    CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name COLLATE NOCASE);
   `);
 }
 

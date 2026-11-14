@@ -6,8 +6,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import java.util.*
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -22,6 +24,7 @@ class ReminderReceiver : BroadcastReceiver() {
             ).apply {
                 description = "Light Assistant Reminders"
                 enableVibration(true)
+                enableLights(true)
             }
             val notificationManager = context.getSystemService(NotificationManager::class.java)
             notificationManager?.createNotificationChannel(channel)
@@ -39,5 +42,26 @@ class ReminderReceiver : BroadcastReceiver() {
         
         val notificationId = System.currentTimeMillis().toInt()
         NotificationManagerCompat.from(context).notify(notificationId, notification)
+        
+        // VOICE ANNOUNCEMENT - Speak the reminder
+        speakReminder(context, title)
+    }
+    
+    private fun speakReminder(context: Context, title: String) {
+        try {
+            val tts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    tts.language = Locale.US
+                    tts.speak("Reminder: $title", TextToSpeech.QUEUE_FLUSH, null, "reminder")
+                    
+                    // Clean up after speaking
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        tts.shutdown()
+                    }, 5000)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ReminderReceiver", "Failed to speak reminder", e)
+        }
     }
 }

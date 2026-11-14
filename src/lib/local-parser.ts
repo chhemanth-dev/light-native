@@ -316,7 +316,7 @@ export interface ParsedPhoneCall {
  * - "phone john"
  * - "dial 555-1234"
  */
-export function parsePhoneCallLocally(text: string): ParsedPhoneCall | null {
+export async function parsePhoneCallLocally(text: string): Promise<ParsedPhoneCall | null> {
   const lower = text.toLowerCase();
   
   // Pattern 1: "call/phone/dial <number>"
@@ -329,15 +329,35 @@ export function parsePhoneCallLocally(text: string): ParsedPhoneCall | null {
     }
   }
   
-  // Pattern 2: "call/phone <name>"
+  // Pattern 2: "call/phone <name>" - Search contacts!
   const namePattern = /(?:call|phone)\s+([a-z\s]+)/i;
   const nameMatch = text.match(namePattern);
   if (nameMatch) {
     const contactName = nameMatch[1].trim();
     // Exclude common false positives
-    if (!['me', 'back', 'you', 'home', 'emergency'].includes(contactName.toLowerCase())) {
-      return { contactName };
+    if (['me', 'back', 'you', 'home', 'emergency'].includes(contactName.toLowerCase())) {
+      return null;
     }
+    
+    // Try to find in contacts (with error handling)
+    try {
+      const { searchContactsByName } = await import('./contacts');
+      const results = await searchContactsByName(contactName);
+      
+      if (results.length > 0) {
+        // Found contact!
+        return { 
+          contactName: results[0].name,
+          phoneNumber: results[0].phoneNumber 
+        };
+      }
+    } catch (error) {
+      console.error('[LocalParser] Failed to search contacts:', error);
+      // Continue - will return contactName without number
+    }
+    
+    // Contact not found, but return name so we can tell user
+    return { contactName };
   }
   
   return null;

@@ -185,6 +185,11 @@ export default function SettingsScreen() {
         <Section title="PRIVACY" />
         <View style={styles.group}>
           <Row
+            label="Manage Contacts"
+            onPress={() => router.push('/contacts')}
+            value="View →"
+          />
+          <Row
             label="View conversation history"
             onPress={() => router.push('/conversation-history')}
             value="View →"

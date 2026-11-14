@@ -205,17 +205,22 @@ export class LightAssistant {
     // ========================================
     if (isPhoneCallCommand(text)) {
       console.log("[Assistant] 📞 Phone call command detected!");
-      const callCmd = parsePhoneCallLocally(text);
+      const callCmd = await parsePhoneCallLocally(text);
       if (callCmd) {
         try {
           if (callCmd.phoneNumber) {
-            // Direct number call
+            // Direct number call OR contact found
             console.log("[Assistant] Calling number:", callCmd.phoneNumber);
             await makePhoneCall(callCmd.phoneNumber);
-            return `Calling ${callCmd.phoneNumber}, sir.`;
+            
+            if (callCmd.contactName) {
+              return `Calling ${callCmd.contactName} at ${callCmd.phoneNumber}, sir.`;
+            } else {
+              return `Calling ${callCmd.phoneNumber}, sir.`;
+            }
           } else if (callCmd.contactName) {
-            // Contact name - we can't look up contacts without AI, but we can try
-            return `I would call ${callCmd.contactName}, sir, but I need to look up their number. This feature requires AI to be working.`;
+            // Contact name but no number found
+            return `I couldn't find ${callCmd.contactName} in your contacts, sir. Please add them in Settings → Contacts, or say "call" followed by the number.`;
           }
         } catch (error) {
           console.error("[Assistant] ❌ Error making call:", error);
