@@ -1,6 +1,6 @@
 /**
  * Contacts Management Screen
- * Add, import, and manage contacts for voice calling
+ * Add and manage contacts for voice calling
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -15,15 +15,10 @@ import {
   Modal,
 } from 'react-native';
 import { router } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import {
   getAllContacts,
   addContact,
   deleteContact,
-  importContactsFromVCF,
-  exportContactsToVCF,
   type Contact,
 } from '../src/lib/contacts';
 
@@ -95,48 +90,6 @@ export default function ContactsScreen() {
     );
   }
 
-  async function handleImportVCF() {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/vcard',
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) return;
-
-      const fileUri = result.assets[0].uri;
-      const vcfContent = await FileSystem.readAsStringAsync(fileUri);
-      const imported = await importContactsFromVCF(vcfContent);
-      
-      await loadContacts();
-      Alert.alert('Success!', `Imported ${imported} contact${imported !== 1 ? 's' : ''} from VCF file`);
-    } catch (error) {
-      console.error('[Contacts] Import error:', error);
-      Alert.alert('Error', 'Failed to import contacts. Make sure the file is a valid VCF file.');
-    }
-  }
-
-  async function handleExportVCF() {
-    try {
-      const vcfContent = await exportContactsToVCF();
-      const fileUri = FileSystem.cacheDirectory + 'light_contacts.vcf';
-      
-      await FileSystem.writeAsStringAsync(fileUri, vcfContent);
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/vcard',
-          dialogTitle: 'Export Contacts',
-        });
-      } else {
-        Alert.alert('Exported', `Contacts exported to: ${fileUri}`);
-      }
-    } catch (error) {
-      console.error('[Contacts] Export error:', error);
-      Alert.alert('Error', 'Failed to export contacts');
-    }
-  }
-
   const renderItem = ({ item }: { item: Contact }) => (
     <View style={styles.contactCard}>
       <View style={styles.contactInfo}>
@@ -168,15 +121,6 @@ export default function ContactsScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.actionsBar}>
-        <Pressable style={styles.actionBtn} onPress={handleImportVCF}>
-          <Text style={styles.actionBtnText}>📥 Import VCF</Text>
-        </Pressable>
-        <Pressable style={styles.actionBtn} onPress={handleExportVCF}>
-          <Text style={styles.actionBtnText}>📤 Export VCF</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
           💡 Add contacts to call by name: "Hey Light, call Mom"
@@ -192,7 +136,7 @@ export default function ContactsScreen() {
           <Text style={styles.emptyIcon}>📇</Text>
           <Text style={styles.emptyText}>No contacts yet</Text>
           <Text style={styles.emptySubText}>
-            Add contacts manually or import from VCF file
+            Tap + Add to add your first contact
           </Text>
         </View>
       ) : (
@@ -299,26 +243,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   addBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-
-  actionsBar: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#0A0F1E',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-  },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  actionBtnText: { color: '#93C5FD', fontSize: 13, fontWeight: '500' },
 
   infoBox: {
     marginHorizontal: 16,
