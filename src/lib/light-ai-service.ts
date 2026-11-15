@@ -7,6 +7,7 @@
 import { patternLearner } from './light-pattern-learner';
 import { lightBrain } from './light-brain';
 import { lightTeacher } from './light-teacher';
+import { storageManager } from './light-storage-manager';
 
 export interface LightAIResponse {
   text: string;
@@ -37,6 +38,13 @@ export class LightAIService {
 
       // Initialize teacher (user demonstrations)
       await lightTeacher.initialize();
+
+      // Check storage and cleanup if needed
+      console.log('📊 Checking storage health...');
+      await storageManager.checkAndCleanup();
+      
+      const stats = await storageManager.getStats();
+      console.log('💾 Storage stats:', stats);
 
       this.initialized = true;
       console.log('✅ Light AI Service ready!');
@@ -304,15 +312,28 @@ export class LightAIService {
     learnedPatterns: number;
     knowledgeItems: number;
     demonstrations: number;
+    storage: {
+      totalMB: number;
+      usagePercent: number;
+      limits: typeof import('./light-storage-manager').STORAGE_LIMITS;
+    };
   }> {
     const patterns = patternLearner.getAllPatterns();
     const knowledge = await lightBrain.recall(''); // Get all knowledge
     const demos = await lightTeacher.getAllDemonstrations();
+    
+    const storageStats = await storageManager.getStats();
+    const usagePercent = await storageManager.getUsagePercentage();
 
     return {
       learnedPatterns: patterns.length,
       knowledgeItems: knowledge.length,
       demonstrations: demos.length,
+      storage: {
+        totalMB: storageStats.totalSizeMB,
+        usagePercent: usagePercent.total,
+        limits: (await import('./light-storage-manager')).STORAGE_LIMITS,
+      },
     };
   }
 
@@ -321,9 +342,41 @@ export class LightAIService {
    */
   async reset(): Promise<void> {
     console.log('🗑️ Resetting Light AI...');
-    await patternLearner.clearPatterns();
-    // Note: Brain and Teacher have their own clear methods if needed
+    await storageManager.clearAll();
     console.log('✅ Light AI reset complete');
+  }
+
+  /**
+   * Force storage cleanup
+   */
+  async cleanupStorage(): Promise<void> {
+    await storageManager.forceCleanup();
+  }
+
+  /**
+   * Get storage health information
+   */
+  async getStorageHealth(): Promise<{
+    status: 'healthy' | 'warning' | 'critical';
+    message: string;
+    stats: Awaited<ReturnType<typeof storageManager.getStats>>;
+    usage: Awaited<ReturnType<typeof storageManager.getUsagePercentage>>;
+  }> {
+    const stats = await storageManager.getStats();
+    const usage = await storageManager.getUsagePercentage();
+    
+    let status: 'healthy' | 'warning' | 'critical' = 'healthy';
+    let message = 'Storage levels are healthy';
+    
+    if (usage.total > 90) {
+      status = 'critical';
+      message = 'Storage almost full! Cleanup recommended.';
+    } else if (usage.total > 75) {
+      status = 'warning';
+      message = 'Storage getting full. Consider cleanup soon.';
+    }
+    
+    return { status, message, stats, usage };
   }
 }
 
@@ -331,4 +384,4 @@ export class LightAIService {
 export const lightAI = new LightAIService();
 
 // Export for convenience
-export { lightBrain, lightTeacher, patternLearner };
+export { lightBrain, lightTeacher, patternLearner, storageManager };

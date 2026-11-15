@@ -22,6 +22,8 @@ export interface LearnedPattern {
   confidence: number;
   actionTemplate?: string;
   responseTemplate?: string;
+  usageCount?: number;      // Track how often used
+  lastUsed?: number;        // Track when last used
 }
 
 const PATTERNS_STORAGE_KEY = '@light_learned_patterns';
@@ -204,6 +206,11 @@ export class LightPatternLearner {
 
     // Require minimum confidence threshold
     if (bestMatch && bestMatch.score > 2) {
+      // Update usage stats
+      bestMatch.pattern.usageCount = (bestMatch.pattern.usageCount || 0) + 1;
+      bestMatch.pattern.lastUsed = Date.now();
+      await this.saveLearnedPatterns(); // Save updated usage stats
+      
       return {
         intent: bestMatch.intent,
         confidence: Math.min(1.0, bestMatch.score / 10),
