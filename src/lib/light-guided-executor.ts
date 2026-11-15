@@ -1,6 +1,7 @@
 /**
  * Light Guided Executor
  * YOU command → LIGHT executes → LIGHT asks if confused → YOU clarify → LIGHT continues
+ * Uses Light AI for understanding (NO EXTERNAL APIs!)
  * 
  * Example flow:
  * You: "Download TikTok app"
@@ -15,6 +16,8 @@
 
 import { NativeModules } from 'react-native';
 import { openApp } from './accessibility';
+import { patternLearner } from './light-pattern-learner';
+import { lightBrain } from './light-brain';
 
 const { AccessibilityActionModule } = NativeModules;
 
@@ -101,28 +104,84 @@ export class LightGuidedExecutor {
 
   /**
    * Analyze goal and take first action
+   * Uses Light AI to understand intent (NO external APIs!)
    */
   private async analyzeGoalAndStart(goal: string): Promise<string> {
     const lower = goal.toLowerCase();
 
-    // PATTERN: Download app
+    // Try to recognize intent using Light AI's pattern learner
+    console.log('🧠 Using Light AI to understand goal:', goal);
+    const recognized = await patternLearner.recognizeIntent(goal);
+
+    if (recognized && recognized.confidence > 0.5) {
+      console.log(`✅ Light AI recognized: ${recognized.intent} (${(recognized.confidence * 100).toFixed(0)}%)`);
+      
+      // Handle based on recognized intent
+      switch (recognized.intent) {
+        case 'app_open':
+          const appName = this.extractAppName(goal);
+          return await this.openAppAndWait(appName);
+        
+        case 'app_download':
+        case 'app_install':
+          const downloadApp = this.extractAppName(goal);
+          return await this.startAppDownload(downloadApp);
+        
+        case 'contact_message':
+        case 'contact_call':
+          return await this.startSendMessage(goal);
+        
+        case 'information_search':
+        case 'information_weather':
+        case 'information_news':
+          return await this.startWebSearch(goal);
+        
+        default:
+          // Let Light AI's suggested action guide us
+          if (recognized.suggestedAction) {
+            return `🎯 Goal: ${goal}\n\nI think I should: ${recognized.suggestedAction}\n\nShould I proceed?`;
+          }
+      }
+    }
+
+    // If Light AI doesn't recognize, try to search web for instructions
+    console.log('🌐 Light AI unsure, searching web for how to do this...');
+    const webResults = await lightBrain.search(`how to ${goal} on android`);
+    
+    if (webResults && webResults.length > 0) {
+      // Store the knowledge
+      await lightBrain.storeKnowledge({
+        query: goal,
+        answer: webResults[0].snippet,
+        source: webResults[0].link,
+        confidence: 0.6,
+      });
+      
+      return `🎯 Goal: ${goal}
+
+🌐 I searched the web and found: "${webResults[0].snippet}"
+
+Let me try... What should I do first?`;
+    }
+
+    // PATTERN: Download app (fallback if Light AI didn't catch it)
     if (lower.includes('download') && (lower.includes('app') || this.looksLikeAppName(goal))) {
       const appName = this.extractAppName(goal);
       return await this.startAppDownload(appName);
     }
 
-    // PATTERN: Open app
+    // PATTERN: Open app (fallback)
     if (lower.includes('open') && (lower.includes('app') || this.looksLikeAppName(goal))) {
       const appName = this.extractAppName(goal);
       return await this.openAppAndWait(appName);
     }
 
-    // PATTERN: Send message
+    // PATTERN: Send message (fallback)
     if ((lower.includes('send') || lower.includes('message')) && lower.includes('to')) {
       return await this.startSendMessage(goal);
     }
 
-    // PATTERN: Search for something
+    // PATTERN: Search for something (fallback)
     if (lower.includes('search') || lower.includes('find') || lower.includes('look for')) {
       return await this.startWebSearch(goal);
     }
@@ -131,7 +190,9 @@ export class LightGuidedExecutor {
     this.context!.state = 'waiting_for_command';
     return `🎯 Goal: ${goal}
 
-I'm ready! What should I do first?
+I'm not sure how to do this yet, but I'm ready to learn!
+
+What should I do first?
 
 Examples:
 - "Open Play Store"

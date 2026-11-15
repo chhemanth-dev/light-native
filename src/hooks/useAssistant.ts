@@ -1,12 +1,17 @@
 /**
  * useAssistant — React hook that wires the LightAssistant to UI state.
  * Handles microphone input via Android's SpeechRecognizer (NativeModule).
+ * 
+ * WAKE WORD INTEGRATION:
+ * - Pauses wake word during active sessions (prevents conflicts)
+ * - Resumes wake word when session ends
  */
 import { useEffect, useRef, useCallback } from "react";
 import { NativeModules, NativeEventEmitter, Platform } from "react-native";
 import { useAppStore } from "../store/appStore";
 import { assistant } from "../lib/assistant";
 import { startSession, endSession } from "../lib/db";
+import { pauseWakeWord, resumeWakeWord } from "../lib/wakeword";
 import * as Haptics from "expo-haptics";
 
 const SpeechModule = Platform.OS === "android" ? NativeModules.SpeechModule : null;
@@ -88,6 +93,10 @@ export function useAssistant() {
     }
     if (Platform.OS !== "android" || !SpeechModule) return;
 
+    // PAUSE WAKE WORD during active listening (prevents conflict)
+    pauseWakeWord();
+    console.log("[useAssistant] Wake word paused for listening");
+
     listeningRef.current = true;
     setAssistantState("listening");
     console.log("[useAssistant] startListening() called");
@@ -157,6 +166,10 @@ export function useAssistant() {
     }
     sessionActiveRef.current = false;
     await assistant.endSession();
+    
+    // RESUME WAKE WORD when session ends (re-enable "Hey Light")
+    resumeWakeWord();
+    console.log("[useAssistant] Wake word resumed after session end");
   }, [sessionId]);
 
   return {

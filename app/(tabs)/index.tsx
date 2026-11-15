@@ -97,11 +97,21 @@ export default function HomeScreen() {
   // Notification listener
   useNotificationListener();
 
-  // Wake word: "Hey Light" - ENABLED!
+  // Wake word: "Hey Light" - ENABLED with conflict prevention!
   useWakeWord(async () => {
-    console.log("[HomeScreen] 🎤 'Hey Light' detected!");
-    await beginSession();
-    await startListening();
+    // Only activate if idle (prevent conflict with orb/ongoing sessions)
+    if (assistantState !== 'idle') {
+      console.log("[HomeScreen] 🎤 'Hey Light' detected but assistant busy, ignoring");
+      return;
+    }
+    
+    console.log("[HomeScreen] 🎤 'Hey Light' detected! Starting session...");
+    try {
+      await beginSession();
+      await startListening();
+    } catch (error) {
+      console.error("[HomeScreen] Error starting session from wake word:", error);
+    }
   }, micGranted);
 
   // Auto-scroll on new content

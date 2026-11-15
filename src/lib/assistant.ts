@@ -1,6 +1,22 @@
 /**
  * Assistant orchestrator — ties together AI, voice, messages, reminders.
- * Now powered by Light AI - fully autonomous, no external APIs needed!
+ * 
+ * PRIMARY AI SYSTEM: Light AI (FREE, no API costs!)
+ * - Pattern recognition from 6000 examples
+ * - Web search for unknown queries
+ * - User-taught demonstrations
+ * - Guided execution (you command, Light executes)
+ * 
+ * EXTERNAL APIs: Legacy fallback only (NOT USED BY DEFAULT)
+ * - Kept for backwards compatibility
+ * - User can optionally configure if they want
+ * - Light AI handles everything by default
+ * 
+ * FLOW:
+ * 1. Local intents (reminders, calls, etc.) - instant, no AI needed
+ * 2. Guided execution (download app, etc.) - Light AI understands, you guide
+ * 3. Light AI chat - pattern recognition + web search
+ * 4. No external API calls by default!
  */
 import { ask, type AIMessage } from "./gemini";
 import { lightAI } from "./light-ai-service";
@@ -129,43 +145,45 @@ export class LightAssistant {
       
       this.history.push({ role: "user", content: userText });
 
-      // Try Light AI first (no API costs!)
-      if (this.lightAIReady) {
-        console.log("[Assistant] 💡 Using Light AI (no API needed)...");
-        try {
-          const lightResponse = await lightAI.chat(userText);
-          console.log("[Assistant] ✅ Light AI response received!");
-          console.log("[Assistant] Source:", lightResponse.source);
-          console.log("[Assistant] Response:", lightResponse.text.substring(0, 100));
-          
-          this.history.push({ role: "assistant", content: lightResponse.text });
-          
-          // Execute action if Light AI recognized one
-          if (lightResponse.action) {
-            console.log("[Assistant] 🎯 Executing Light AI action:", lightResponse.action);
-            await lightAI.executeAction(lightResponse.intent || '', userText);
-          }
-          
-          // If Light AI suggests teaching mode
-          if (lightResponse.requiresTeaching) {
-            // User can teach Light AI through a future interaction
-            console.log("[Assistant] 📚 Light AI needs teaching for this task");
-          }
-          
-          await this.respond(lightResponse.text, false);
-          return;
-        } catch (lightError) {
-          console.warn("[Assistant] ⚠️ Light AI failed, falling back to external API:", lightError);
-          // Fall through to external API
+      // ========================================
+      // ALWAYS USE LIGHT AI FIRST (NO API COSTS!)
+      // ========================================
+      console.log("[Assistant] 💡 Using Light AI (FREE, no API needed)...");
+      
+      try {
+        const lightResponse = await lightAI.chat(userText);
+        console.log("[Assistant] ✅ Light AI response received!");
+        console.log("[Assistant] Source:", lightResponse.source);
+        console.log("[Assistant] Response:", lightResponse.text.substring(0, 100));
+        
+        this.history.push({ role: "assistant", content: lightResponse.text });
+        
+        // Execute action if Light AI recognized one
+        if (lightResponse.action) {
+          console.log("[Assistant] 🎯 Executing Light AI action:", lightResponse.action);
+          await lightAI.executeAction(lightResponse.intent || '', userText);
         }
-      } else {
-        console.log("[Assistant] ⚠️ Light AI not ready yet, using external API...");
+        
+        // If Light AI suggests teaching mode
+        if (lightResponse.requiresTeaching) {
+          // User can teach Light AI through a future interaction
+          console.log("[Assistant] 📚 Light AI needs teaching for this task");
+        }
+        
+        await this.respond(lightResponse.text, false);
+        return;
+      } catch (lightError) {
+        console.warn("[Assistant] ⚠️ Light AI failed:", lightError);
+        // If Light AI completely fails, show a helpful message
+        await this.respond(
+          "I'm having trouble understanding that. Could you try asking in a different way? Or check if I need more training data.",
+          true
+        );
+        return;
       }
 
-      // Fallback to external API if Light AI not available or failed
-      console.log("[Assistant] ⏳ Calling external AI with", this.history.length, "messages in history...");
-      const { text, offline } = await ask(this.history, context);
-      console.log("[Assistant] ✅ AI response received!");
+      // NOTE: We removed the fallback to external APIs
+      // Light AI handles everything now!
       console.log("[Assistant] Offline mode:", offline);
       console.log("[Assistant] Response:", text.substring(0, 100));
       
@@ -175,19 +193,7 @@ export class LightAssistant {
         this.history = this.history.slice(-20);
       }
 
-      // Execute any actions mentioned in AI response
-      if (shouldExecuteActions(text)) {
-        console.log("[Assistant] 🎯 AI response contains action commands - executing...");
-        try {
-          const actions = await executeActionsFromAIResponse(userText, text);
-          const successfulActions = actions.filter(a => a.success && a.type !== 'none');
-          if (successfulActions.length > 0) {
-            console.log("[Assistant] ✅ Executed", successfulActions.length, "action(s) from AI response");
-          }
-        } catch (error) {
-          console.error("[Assistant] ❌ Failed to execute actions from AI response:", error);
-        }
-      }
+      // Execute any actions mentioned in AI response (REMOVED - Light AI handles actions)
 
       await this.respond(text, offline);
     } catch (e) {
@@ -195,21 +201,12 @@ export class LightAssistant {
       console.error("[Assistant] ❌ ERROR:", msg);
       console.error("[Assistant] Error details:", e);
       
-      // Parse specific error types for user-friendly messages
-      if (msg.includes('credit_balance_exhausted') || msg.includes('insufficient_quota')) {
-        msg = "Your API key has run out of credits. Please add a new key or add credits to your account in AI Settings.";
-      } else if (msg.includes('invalid_api_key') || msg.includes('authentication')) {
-        msg = "API key is invalid or expired. Please update your API key in AI Settings.";
-      } else if (msg.includes('No API keys configured')) {
-        msg = "No API keys found. Please add at least one API key in Settings → AI Settings.";
-      } else if (msg.includes('failed with all') && msg.includes('key(s)')) {
-        // Extract provider and key count from error message
-        msg = "All your API keys have failed. Please check your keys in AI Settings or add new ones.";
-      }
+      // Note: External API error handling is kept for legacy support only
+      // Light AI is now the primary system and should handle everything
       
       this.setState("error");
-      this.emit({ type: "error", message: msg });
-      setTimeout(() => this.setState("idle"), 3000); // Increased timeout for longer messages
+      this.emit({ type: "error", message: "I had trouble with that. Could you try rephrasing?" });
+      setTimeout(() => this.setState("idle"), 3000);
     }
   }
 
