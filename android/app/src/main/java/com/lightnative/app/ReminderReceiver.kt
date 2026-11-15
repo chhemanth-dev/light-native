@@ -49,14 +49,15 @@ class ReminderReceiver : BroadcastReceiver() {
     
     private fun speakReminder(context: Context, title: String) {
         try {
-            val tts = TextToSpeech(context) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts.language = Locale.US
-                    tts.speak("Reminder: $title", TextToSpeech.QUEUE_FLUSH, null, "reminder")
+            var textToSpeech: TextToSpeech? = null
+            textToSpeech = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS && textToSpeech != null) {
+                    textToSpeech.language = Locale.US
+                    textToSpeech.speak("Reminder: $title", TextToSpeech.QUEUE_FLUSH, null, "reminder")
                     
                     // Clean up after speaking
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        tts.shutdown()
+                        textToSpeech?.shutdown()
                     }, 5000)
                 }
             }
