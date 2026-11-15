@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import com.lightnative.app.MainActivity;
 
 /**
  * Wake Word Service - Always-on listening for "Hey Google" / "Hey Light"
@@ -90,7 +91,7 @@ public class WakeWordService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Light is listening")
             .setContentText("Say 'Hey Light' or 'Hey Google' to activate")
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
