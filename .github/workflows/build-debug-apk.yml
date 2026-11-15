@@ -49,9 +49,29 @@ jobs:
         env:
           JAVA_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
+      - name: Get version info
+        id: version
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: light-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          tag_name: debug-v${{ steps.version.outputs.date }}-${{ steps.version.outputs.sha_short }}
+          name: Light Native Debug v${{ steps.version.outputs.date }}
+          body: |
+            🔧 **Light Native Android Debug Build**
+            
+            **Build Info:**
+            - Commit: `${{ github.sha }}`
+            - Date: ${{ steps.version.outputs.date }}
+            
+            ⚠️ This is a debug build for testing purposes.
+            
+            **Download:** Click on `app-debug.apk` below
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
