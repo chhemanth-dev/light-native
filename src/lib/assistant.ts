@@ -1,7 +1,9 @@
 /**
  * Assistant orchestrator — ties together AI, voice, messages, reminders.
+ * Now powered by Light AI - fully autonomous, no external APIs needed!
  */
 import { ask, type AIMessage } from "./gemini";
+import { lightAI } from "./light-ai-service";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
 import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } from "./reminders";
@@ -34,6 +36,24 @@ export class LightAssistant {
   private history: AIMessage[] = [];
   private handlers: EventHandler[] = [];
   private state: AssistantState = "idle";
+  private lightAIReady = false;
+
+  constructor() {
+    // Initialize Light AI in background
+    this.initializeLightAI();
+  }
+
+  private async initializeLightAI() {
+    try {
+      console.log("[Assistant] 🚀 Initializing Light AI...");
+      await lightAI.initialize();
+      this.lightAIReady = true;
+      console.log("[Assistant] ✅ Light AI ready!");
+    } catch (error) {
+      console.error("[Assistant] ❌ Light AI initialization failed:", error);
+      console.log("[Assistant] ⚠️ Will fall back to external APIs");
+    }
+  }
 
   on(handler: EventHandler) {
     this.handlers.push(handler);
@@ -108,7 +128,41 @@ export class LightAssistant {
       
       this.history.push({ role: "user", content: userText });
 
-      console.log("[Assistant] ⏳ Calling AI with", this.history.length, "messages in history...");
+      // Try Light AI first (no API costs!)
+      if (this.lightAIReady) {
+        console.log("[Assistant] 💡 Using Light AI (no API needed)...");
+        try {
+          const lightResponse = await lightAI.chat(userText);
+          console.log("[Assistant] ✅ Light AI response received!");
+          console.log("[Assistant] Source:", lightResponse.source);
+          console.log("[Assistant] Response:", lightResponse.text.substring(0, 100));
+          
+          this.history.push({ role: "assistant", content: lightResponse.text });
+          
+          // Execute action if Light AI recognized one
+          if (lightResponse.action) {
+            console.log("[Assistant] 🎯 Executing Light AI action:", lightResponse.action);
+            await lightAI.executeAction(lightResponse.intent || '', userText);
+          }
+          
+          // If Light AI suggests teaching mode
+          if (lightResponse.requiresTeaching) {
+            // User can teach Light AI through a future interaction
+            console.log("[Assistant] 📚 Light AI needs teaching for this task");
+          }
+          
+          await this.respond(lightResponse.text, false);
+          return;
+        } catch (lightError) {
+          console.warn("[Assistant] ⚠️ Light AI failed, falling back to external API:", lightError);
+          // Fall through to external API
+        }
+      } else {
+        console.log("[Assistant] ⚠️ Light AI not ready yet, using external API...");
+      }
+
+      // Fallback to external API if Light AI not available or failed
+      console.log("[Assistant] ⏳ Calling external AI with", this.history.length, "messages in history...");
       const { text, offline } = await ask(this.history, context);
       console.log("[Assistant] ✅ AI response received!");
       console.log("[Assistant] Offline mode:", offline);
