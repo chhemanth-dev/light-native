@@ -52,7 +52,7 @@ const TRIED_ALL_KEYS: {
 };
 
 const API_URLS = {
-  gemini: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent",
   deepseek: "https://api.deepseek.com/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
 };
@@ -101,11 +101,17 @@ Examples:
 
 /**
  * Call Gemini API (Google)
+ * Supports both API keys and OAuth tokens
  */
 async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
   console.log('[Gemini] Starting API call...');
-  console.log('[Gemini] API Key:', API_KEYS.gemini ? '✓ Present' : '✗ Missing');
+  const apiKey = getCurrentKey('gemini');
+  console.log('[Gemini] API Key:', apiKey ? '✓ Present' : '✗ Missing');
   console.log('[Gemini] Messages count:', messages.length);
+  
+  if (!apiKey) {
+    throw new Error('Gemini API key not configured');
+  }
   
   const fullPrompt = buildPrompt(messages);
   console.log('[Gemini] Prompt length:', fullPrompt.length);
@@ -124,12 +130,33 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   
   try {
-    const apiUrl = API_URLS.gemini + '?key=' + getCurrentKey('gemini');
-    console.log('[Gemini] Calling API:', API_URLS.gemini);
+    // Check if it's an OAuth token (starts with 'ya29.') or API key
+    const isOAuthToken = apiKey.startsWith('ya29.');
+    let apiUrl: string;
+    let headers: Record<string, string>;
+    
+    if (isOAuthToken) {
+      // OAuth 2.0 authentication
+      console.log('[Gemini] Using OAuth 2.0 token');
+      apiUrl = API_URLS.gemini.replace('?key=', ''); // Remove key param
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      };
+    } else {
+      // API Key authentication
+      console.log('[Gemini] Using API key');
+      apiUrl = API_URLS.gemini + '?key=' + apiKey;
+      headers = {
+        'Content-Type': 'application/json',
+      };
+    }
+    
+    console.log('[Gemini] Calling API:', apiUrl.split('?')[0]);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
@@ -141,6 +168,16 @@ async function callGeminiAPI(messages: AIMessage[]): Promise<string> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Gemini] API error response:', errorText);
+      
+      // Better error messages
+      if (response.status === 400 && errorText.includes('API key not valid')) {
+        throw new Error('Gemini API key is invalid. Get a new key from Google AI Studio (makersuite.google.com)');
+      } else if (response.status === 403) {
+        throw new Error('Gemini API access denied. Make sure your key has the correct permissions.');
+      } else if (response.status === 429) {
+        throw new Error('Gemini API rate limit exceeded. Please try again in a moment.');
+      }
+      
       throw new Error('Gemini API error: ' + response.status + ' - ' + errorText);
     }
 

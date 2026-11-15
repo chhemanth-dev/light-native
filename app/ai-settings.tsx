@@ -205,7 +205,7 @@ export default function AISettingsScreen() {
         </View>
 
         <Text style={styles.keyHint}>
-          {provider === 'gemini' && '🔗 Get key at: makersuite.google.com/app/apikey'}
+          {provider === 'gemini' && '🔗 Get API key at: makersuite.google.com/app/apikey\n💡 Note: Use API key (not OAuth token) for mobile apps'}
           {provider === 'deepseek' && '🔗 Get key at: platform.deepseek.com'}
           {provider === 'openai' && '🔗 Get key at: platform.openai.com/api-keys'}
         </Text>
