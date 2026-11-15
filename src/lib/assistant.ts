@@ -4,6 +4,7 @@
  */
 import { ask, type AIMessage } from "./gemini";
 import { lightAI } from "./light-ai-service";
+import { guidedExecutor } from "./light-guided-executor";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
 import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } from "./reminders";
@@ -255,6 +256,31 @@ export class LightAssistant {
     console.log("[Assistant] handleLocalIntent checking:", lower);
 
     // ========================================
+    // PRIORITY 0: GUIDED EXECUTION COMMANDS
+    // ========================================
+    const executorContext = guidedExecutor.getContext();
+    
+    // If there's an active execution task, route commands to it
+    if (executorContext && executorContext.state !== 'completed') {
+      console.log("[Assistant] 🎯 Routing to guided executor");
+      
+      // Cancel command
+      if (lower.match(/\b(cancel|stop|abort|nevermind)\b/)) {
+        return await guidedExecutor.cancel();
+      }
+      
+      // Otherwise, treat as execution command
+      return await guidedExecutor.executeCommand(text);
+    }
+
+    // Start new guided execution task
+    // Pattern: "download app", "open app and do X", "send message to X"
+    if (this.isGuidedTaskCommand(lower)) {
+      console.log("[Assistant] 🎯 Starting guided execution");
+      return await guidedExecutor.startTask(text);
+    }
+
+    // ========================================
     // PRIORITY 1: PHONE CALLS (NO AI NEEDED)
     // ========================================
     if (isPhoneCallCommand(text)) {
@@ -436,6 +462,28 @@ export class LightAssistant {
     }
 
     return null;
+  }
+
+  /**
+   * Check if command should start guided execution
+   */
+  private isGuidedTaskCommand(lower: string): boolean {
+    // Download patterns
+    if (lower.match(/\bdownload\b/) && (lower.match(/\bapp\b/) || lower.match(/tiktok|instagram|facebook|whatsapp|youtube/i))) {
+      return true;
+    }
+
+    // Complex multi-step tasks
+    if (lower.match(/\b(open|go to)\b.*(and|then)\b/)) {
+      return true; // "open settings and turn on WiFi"
+    }
+
+    // Explicit guidance request
+    if (lower.match(/\b(guide me|help me|show me how)\b/)) {
+      return true;
+    }
+
+    return false;
   }
 
   private async buildContext(userText: string): Promise<string> {
