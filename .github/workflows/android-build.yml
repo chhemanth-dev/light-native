@@ -58,9 +58,23 @@ jobs:
       env:
         GRADLE_OPTS: "-Xmx6g -Xms512m -XX:MaxMetaspaceSize=1g"
         
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+    - name: Get short SHA
+      id: slug
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
       with:
-        name: LightNative-debug
-        path: android/app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 30
+        tag_name: build-${{ steps.slug.outputs.sha_short }}
+        name: Build ${{ steps.slug.outputs.sha_short }}
+        body: |
+          Automated Android build from commit ${{ github.sha }}
+          
+          **Changes in this build:**
+          ${{ github.event.head_commit.message }}
+        files: android/app/build/outputs/apk/debug/app-debug.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
