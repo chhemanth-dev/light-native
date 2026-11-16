@@ -100,5 +100,10 @@
       android:name=".ReminderReceiver"
       android:enabled="true"
       android:exported="false"/>
+    
+    <!-- Floating Assistant Overlay Service -->
+    <service
+      android:name=".FloatingAssistantService"
+      android:exported="false"/>
   </application>
 </manifest>

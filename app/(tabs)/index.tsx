@@ -16,7 +16,7 @@ import { OrbAnimation } from "../../src/components/OrbAnimation";
 import { TranscriptBubble } from "../../src/components/TranscriptBubble";
 import { AssistantStatusBar } from "../../src/components/StatusBar";
 import { DraftReplySheet } from "../../src/components/DraftReplySheet";
-import { jarvisMode } from "../../src/lib/jarvis-mode";
+import { floatingAssistant } from "../../src/lib/floating-assistant";
 
 function extractDraft(response: string): string | null {
   const patterns = [
@@ -72,8 +72,8 @@ export default function HomeScreen() {
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   
-  // JARVIS MODE - continuous listening
-  const [jarvisModeActive, setJarvisModeActive] = useState(false);
+  // Floating assistant state
+  const [floatingActive, setFloatingActive] = useState(false);
 
   // Request mic on mount
   useEffect(() => {
@@ -102,7 +102,6 @@ export default function HomeScreen() {
   useNotificationListener();
 
   // Wake word: "Hey Light" - ENABLED with conflict prevention!
-  // Only if JARVIS mode is OFF
   useWakeWord(async () => {
     // Only activate if idle (prevent conflict with orb/ongoing sessions)
     if (assistantState !== 'idle') {
@@ -117,7 +116,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.error("[HomeScreen] Error starting session from wake word:", error);
     }
-  }, micGranted && !jarvisModeActive); // Disable wake word if JARVIS mode is active
+  }, micGranted);
 
   // Auto-scroll on new content
   useEffect(() => {
@@ -207,16 +206,23 @@ export default function HomeScreen() {
     }
   }
   
-  // JARVIS MODE TOGGLE
-  async function toggleJarvisMode() {
-    if (jarvisModeActive) {
-      await jarvisMode.stop();
-      setJarvisModeActive(false);
-      console.log("[HomeScreen] JARVIS mode deactivated");
-    } else {
-      await jarvisMode.start();
-      setJarvisModeActive(true);
-      console.log("[HomeScreen] JARVIS mode activated");
+  // FLOATING ASSISTANT toggle
+  async function toggleFloatingAssistant() {
+    try {
+      if (floatingActive) {
+        console.log("[HomeScreen] Stopping floating assistant...");
+        await floatingAssistant.stop();
+        setFloatingActive(false);
+      } else {
+        console.log("[HomeScreen] Starting floating assistant...");
+        const success = await floatingAssistant.start();
+        setFloatingActive(success);
+        if (success) {
+          console.log("[HomeScreen] ✅ Floating assistant started! You can now use Light from ANY app!");
+        }
+      }
+    } catch (e) {
+      console.error("[HomeScreen] Error toggling floating assistant:", e);
     }
   }
 
@@ -284,31 +290,38 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* JARVIS MODE TOGGLE */}
-      {assistantState === "idle" && (
-        <Pressable 
-          style={[
-            styles.jarvisBtn, 
-            jarvisModeActive && styles.jarvisBtnActive
-          ]} 
-          onPress={toggleJarvisMode}
-        >
-          <Text style={[styles.jarvisBtnText, jarvisModeActive && styles.jarvisBtnTextActive]}>
-            {jarvisModeActive ? '🤖 JARVIS MODE ON' : '💤 TAP FOR JARVIS MODE'}
-          </Text>
-          <Text style={styles.jarvisBtnSubtext}>
-            {jarvisModeActive ? 'Always listening - just speak!' : 'Continuous conversation like Iron Man'}
-          </Text>
-        </Pressable>
-      )}
-
       {/* TYPE INSTEAD button - for broken mic */}
-      {assistantState === "idle" && !showTextInput && !jarvisModeActive && (
+      {assistantState === "idle" && !showTextInput && (
         <Pressable 
           style={[styles.endBtn, { backgroundColor: "#0A1F1F", borderColor: "#0891B2", marginBottom: 8 }]} 
           onPress={() => setShowTextInput(true)}
         >
           <Text style={[styles.endBtnText, { color: "#67E8F9" }]}>⌨️ Type Instead (Mic Broken?)</Text>
+        </Pressable>
+      )}
+      
+      {/* FLOATING ASSISTANT toggle - Use Light from ANY app! */}
+      {assistantState === "idle" && (
+        <Pressable 
+          style={[
+            styles.endBtn, 
+            floatingActive 
+              ? { backgroundColor: "#0A1F0A", borderColor: "#22C55E", marginBottom: 8 }
+              : { backgroundColor: "#1E0A2E", borderColor: "#7C3AED", marginBottom: 8 }
+          ]} 
+          onPress={toggleFloatingAssistant}
+        >
+          <Text style={[
+            styles.endBtnText, 
+            { color: floatingActive ? "#86EFAC" : "#C4B5FD" }
+          ]}>
+            {floatingActive ? "✅ Floating Assistant Active" : "🚀 Enable Floating Assistant"}
+          </Text>
+          {floatingActive && (
+            <Text style={[styles.endBtnText, { color: "#86EFAC", fontSize: 10, marginTop: 4, opacity: 0.7 }]}>
+              You can now use Light from ANY app!
+            </Text>
+          )}
         </Pressable>
       )}
       
@@ -445,33 +458,4 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 12, alignItems: "center",
   },
   endBtnText: { color: "#FCA5A5", fontSize: 13, fontWeight: "600" },
-  jarvisBtn: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: "#0A1F1F",
-    borderWidth: 2,
-    borderColor: "#0891B2",
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-  },
-  jarvisBtnActive: {
-    backgroundColor: "#064E3B",
-    borderColor: "#10B981",
-  },
-  jarvisBtnText: {
-    color: "#67E8F9",
-    fontSize: 15,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  jarvisBtnTextActive: {
-    color: "#34D399",
-  },
-  jarvisBtnSubtext: {
-    color: "#475569",
-    fontSize: 11,
-    textAlign: "center",
-  },
 });

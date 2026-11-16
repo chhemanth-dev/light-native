@@ -54,7 +54,9 @@ export class LightAssistant {
   private handlers: EventHandler[] = [];
   private state: AssistantState = "idle";
   private lightAIReady = false;
-  private conversationContext: string[] = []; // NEW: Remember conversation context
+  private conversationContext: string[] = []; // Remember conversation context
+  private currentApp: string | null = null; // NEW: Remember what app is open
+  private lastAction: string | null = null; // NEW: Remember last action
 
   constructor() {
     // Initialize Light AI in background
@@ -128,6 +130,8 @@ export class LightAssistant {
 
     console.log("=========================================");
     console.log("[Assistant] NEW INPUT:", userText);
+    console.log("[Assistant] Current App:", this.currentApp);
+    console.log("[Assistant] Last Action:", this.lastAction);
     console.log("=========================================");
     this.setState("thinking");
     this.emit({ type: "transcript", text: userText });
@@ -142,8 +146,15 @@ export class LightAssistant {
         });
       }
 
+      // Add app context to the command if we're in an app
+      let contextualInput = userText;
+      if (this.currentApp) {
+        contextualInput = `[In ${this.currentApp}] ${userText}`;
+        console.log("[Assistant] Added app context:", contextualInput);
+      }
+
       console.log("[Assistant] Checking local intent...");
-      const localResponse = await this.handleLocalIntent(userText);
+      const localResponse = await this.handleLocalIntent(contextualInput);
       if (localResponse) {
         console.log("[Assistant] ✅ Using LOCAL response:", localResponse.substring(0, 80));
         await this.respond(localResponse, true);

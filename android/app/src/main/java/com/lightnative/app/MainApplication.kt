@@ -25,6 +25,7 @@ class MainApplication : Application(), ReactApplication {
             // packages.add(new MyReactNativePackage());
             return PackageList(this).packages.apply {
               add(LightPackage())
+              add(FloatingAssistantPackage())
             }
           }
 
