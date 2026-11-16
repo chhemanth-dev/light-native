@@ -12,7 +12,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
-import com.lightnative.R
+import com.lightnative.app.R
 
 /**
  * Floating Assistant Overlay

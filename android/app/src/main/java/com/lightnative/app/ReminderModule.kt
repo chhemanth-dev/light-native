@@ -17,15 +17,19 @@ class ReminderModule(private val reactContext: ReactApplicationContext) : ReactC
         try {
             val alarmManager = reactContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             
+            // Use a unique ID based on timestamp AND title hash to avoid collisions
+            val uniqueId = (timestampMillis.toLong() % Int.MAX_VALUE).toInt() + title.hashCode()
+            
             // Create intent for the reminder
             val intent = Intent(reactContext, ReminderReceiver::class.java).apply {
                 putExtra("REMINDER_TITLE", title)
                 putExtra("REMINDER_TIME", timestampMillis.toLong())
+                putExtra("REMINDER_ID", uniqueId)
             }
             
             val pendingIntent = PendingIntent.getBroadcast(
                 reactContext,
-                timestampMillis.toInt(), // Use timestamp as unique request code
+                uniqueId, // Use unique ID instead of just timestamp
                 intent,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -49,7 +53,7 @@ class ReminderModule(private val reactContext: ReactApplicationContext) : ReactC
                 )
             }
             
-            promise.resolve("Reminder set for: $title")
+            promise.resolve("Reminder set for: $title (ID: $uniqueId)")
         } catch (e: Exception) {
             promise.reject("REMINDER_ERROR", "Failed to set reminder: ${e.message}")
         }
