@@ -15,7 +15,7 @@
             android:id="@+id/floating_orb"
             android:layout_width="60dp"
             android:layout_height="60dp"
-            android:src="@drawable/ic_launcher_foreground"
+            android:src="@mipmap/ic_launcher"
             android:scaleType="fitCenter"
             android:padding="8dp"/>
 
