@@ -54,6 +54,7 @@ export class LightAssistant {
   private handlers: EventHandler[] = [];
   private state: AssistantState = "idle";
   private lightAIReady = false;
+  private conversationContext: string[] = []; // NEW: Remember conversation context
 
   constructor() {
     // Initialize Light AI in background
@@ -94,7 +95,18 @@ export class LightAssistant {
 
   startSession(sessionId: string) {
     this.sessionId = sessionId;
-    this.history = [];
+    // DON'T clear history! Keep conversation context
+    // this.history = []; // REMOVED - we want continuous conversation
+    
+    // Only clear history if it's been more than 10 minutes since last interaction
+    const lastInteraction = this.history[this.history.length - 1];
+    if (!lastInteraction || Date.now() - (lastInteraction as any).timestamp > 10 * 60 * 1000) {
+      this.history = [];
+      this.conversationContext = [];
+      console.log("[Assistant] New conversation (10+ min gap)");
+    } else {
+      console.log("[Assistant] Continuing conversation with", this.history.length, "messages in context");
+    }
     
     // Refresh installed apps cache when session starts
     refreshInstalledAppsCache().catch(err => 
@@ -103,10 +115,12 @@ export class LightAssistant {
   }
 
   async endSession() {
-    this.sessionId = null;
-    this.history = [];
+    // DON'T clear everything - keep conversation context!
+    // this.sessionId = null;  // REMOVED - don't clear session
+    // this.history = []; // REMOVED - keep history for next interaction
     await stopSpeaking();
     this.setState("idle");
+    console.log("[Assistant] Session ended, keeping context for next interaction");
   }
 
   async handleInput(userText: string) {

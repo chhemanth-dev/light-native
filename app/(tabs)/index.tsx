@@ -16,6 +16,7 @@ import { OrbAnimation } from "../../src/components/OrbAnimation";
 import { TranscriptBubble } from "../../src/components/TranscriptBubble";
 import { AssistantStatusBar } from "../../src/components/StatusBar";
 import { DraftReplySheet } from "../../src/components/DraftReplySheet";
+import { jarvisMode } from "../../src/lib/jarvis-mode";
 
 function extractDraft(response: string): string | null {
   const patterns = [
@@ -70,6 +71,9 @@ export default function HomeScreen() {
   // Text input fallback (for when mic doesn't work)
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
+  
+  // JARVIS MODE - continuous listening
+  const [jarvisModeActive, setJarvisModeActive] = useState(false);
 
   // Request mic on mount
   useEffect(() => {
@@ -98,6 +102,7 @@ export default function HomeScreen() {
   useNotificationListener();
 
   // Wake word: "Hey Light" - ENABLED with conflict prevention!
+  // Only if JARVIS mode is OFF
   useWakeWord(async () => {
     // Only activate if idle (prevent conflict with orb/ongoing sessions)
     if (assistantState !== 'idle') {
@@ -112,7 +117,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.error("[HomeScreen] Error starting session from wake word:", error);
     }
-  }, micGranted);
+  }, micGranted && !jarvisModeActive); // Disable wake word if JARVIS mode is active
 
   // Auto-scroll on new content
   useEffect(() => {
@@ -201,6 +206,19 @@ export default function HomeScreen() {
       console.error("[HomeScreen] Text input error:", e);
     }
   }
+  
+  // JARVIS MODE TOGGLE
+  async function toggleJarvisMode() {
+    if (jarvisModeActive) {
+      await jarvisMode.stop();
+      setJarvisModeActive(false);
+      console.log("[HomeScreen] JARVIS mode deactivated");
+    } else {
+      await jarvisMode.start();
+      setJarvisModeActive(true);
+      console.log("[HomeScreen] JARVIS mode activated");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -266,8 +284,26 @@ export default function HomeScreen() {
         </Text>
       </View>
 
+      {/* JARVIS MODE TOGGLE */}
+      {assistantState === "idle" && (
+        <Pressable 
+          style={[
+            styles.jarvisBtn, 
+            jarvisModeActive && styles.jarvisBtnActive
+          ]} 
+          onPress={toggleJarvisMode}
+        >
+          <Text style={[styles.jarvisBtnText, jarvisModeActive && styles.jarvisBtnTextActive]}>
+            {jarvisModeActive ? '🤖 JARVIS MODE ON' : '💤 TAP FOR JARVIS MODE'}
+          </Text>
+          <Text style={styles.jarvisBtnSubtext}>
+            {jarvisModeActive ? 'Always listening - just speak!' : 'Continuous conversation like Iron Man'}
+          </Text>
+        </Pressable>
+      )}
+
       {/* TYPE INSTEAD button - for broken mic */}
-      {assistantState === "idle" && !showTextInput && (
+      {assistantState === "idle" && !showTextInput && !jarvisModeActive && (
         <Pressable 
           style={[styles.endBtn, { backgroundColor: "#0A1F1F", borderColor: "#0891B2", marginBottom: 8 }]} 
           onPress={() => setShowTextInput(true)}
@@ -409,4 +445,33 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 12, alignItems: "center",
   },
   endBtnText: { color: "#FCA5A5", fontSize: 13, fontWeight: "600" },
+  jarvisBtn: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "#0A1F1F",
+    borderWidth: 2,
+    borderColor: "#0891B2",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+  },
+  jarvisBtnActive: {
+    backgroundColor: "#064E3B",
+    borderColor: "#10B981",
+  },
+  jarvisBtnText: {
+    color: "#67E8F9",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  jarvisBtnTextActive: {
+    color: "#34D399",
+  },
+  jarvisBtnSubtext: {
+    color: "#475569",
+    fontSize: 11,
+    textAlign: "center",
+  },
 });

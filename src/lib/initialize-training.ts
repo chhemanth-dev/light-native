@@ -10,7 +10,8 @@ const TRAINING_INITIALIZED_KEY = '@light_training_initialized';
 
 // Import training data (in React Native, you need to require JSON files)
 // This will be bundled with the app
-const trainingData = require('../data/light_training_data.json');
+// Use ULTIMATE training data (44,000+ examples for maximum intelligence!)
+const trainingData = require('../data/light_training_ultimate.json');
 
 /**
  * Initialize training data on first launch
