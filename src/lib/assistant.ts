@@ -97,18 +97,10 @@ export class LightAssistant {
 
   startSession(sessionId: string) {
     this.sessionId = sessionId;
-    // DON'T clear history! Keep conversation context
-    // this.history = []; // REMOVED - we want continuous conversation
-    
-    // Only clear history if it's been more than 10 minutes since last interaction
-    const lastInteraction = this.history[this.history.length - 1];
-    if (!lastInteraction || Date.now() - (lastInteraction as any).timestamp > 10 * 60 * 1000) {
-      this.history = [];
-      this.conversationContext = [];
-      console.log("[Assistant] New conversation (10+ min gap)");
-    } else {
-      console.log("[Assistant] Continuing conversation with", this.history.length, "messages in context");
-    }
+    // NEVER clear history! Keep conversation context FOREVER
+    // Device impact: Negligible - text history is tiny (few KB per day)
+    // Each message ~100 bytes, 1000 messages = 100KB (less than 1 photo!)
+    console.log("[Assistant] Continuing conversation with", this.history.length, "messages in memory");
     
     // Refresh installed apps cache when session starts
     refreshInstalledAppsCache().catch(err => 
@@ -366,16 +358,26 @@ export class LightAssistant {
     // ========================================
     if (isReminderCommand(text)) {
       console.log("[Assistant] ⏰ Reminder command detected!");
+      console.log("[Assistant] Raw input:", text);
       const parsed = parseReminderLocally(text);
+      console.log("[Assistant] Parsed result:", JSON.stringify(parsed));
+      
       if (parsed) {
         try {
           const fireAt = Date.now() + (parsed.minutes * 60 * 1000);
-          await scheduleReminder({
+          console.log("[Assistant] Scheduling reminder:");
+          console.log("[Assistant]  - Title:", parsed.title);
+          console.log("[Assistant]  - Minutes:", parsed.minutes);
+          console.log("[Assistant]  - Fire at:", new Date(fireAt).toLocaleString());
+          
+          const result = await scheduleReminder({
             id: Date.now().toString(),
             title: parsed.title,
             time: fireAt,
             repeatInterval: null,
           });
+          
+          console.log("[Assistant] ✅ Reminder scheduled successfully:", result);
           
           let timeDesc = '';
           if (parsed.minutes < 60) {
@@ -389,19 +391,12 @@ export class LightAssistant {
           return `Reminder set ${timeDesc}: "${parsed.title}", sir.`;
         } catch (error) {
           console.error("[Assistant] ❌ Error setting reminder:", error);
-          return "I'm sorry, sir. I couldn't schedule that reminder.";
+          console.error("[Assistant] Error details:", JSON.stringify(error, null, 2));
+          return `I had trouble setting that reminder, sir. Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please check if I have alarm permissions.`;
         }
-      }
-      
-      // Fallback to old parser if new one didn't work
-      const oldParsed = parseReminderFromSpeech(text);
-      if (oldParsed) {
-        try {
-          await scheduleReminder(oldParsed);
-          return formatReminderConfirmation(oldParsed.title, oldParsed.time);
-        } catch {
-          return "I'm sorry, sir. I couldn't schedule that reminder.";
-        }
+      } else {
+        console.log("[Assistant] ⚠️ Could not parse reminder from:", text);
+        return "I'm sorry, sir. I didn't understand the reminder time. Please try formats like 'remind me to call mom in 30 minutes' or 'remind me at 3pm to check email'.";
       }
     }
 

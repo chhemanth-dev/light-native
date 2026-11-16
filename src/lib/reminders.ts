@@ -48,25 +48,34 @@ export interface ReminderOptions {
  */
 export async function setReminder(options: ReminderOptions): Promise<string> {
   if (!isReminderModuleAvailable()) {
-    throw new Error("Reminder module is not available");
+    const error = "Reminder module is not available - check native module registration";
+    console.error('[Reminders]', error);
+    throw new Error(error);
   }
 
-  const timestampMillis = options.time.getTime();
+  const time = typeof options.time === 'number' ? new Date(options.time) : options.time;
+  const timestampMillis = time.getTime();
   
-  console.log('[Reminders] Setting reminder:', options.title, 'at', options.time.toLocaleString());
+  console.log('[Reminders] Setting reminder:', {
+    title: options.title,
+    time: time.toLocaleString(),
+    timestampMillis,
+  });
   
   try {
     const result = await ReminderModule.setReminder(options.title, timestampMillis);
-    console.log('[Reminders] Success:', result);
+    console.log('[Reminders] ✅ Success:', result);
     
     // Voice confirmation
     const { speak } = require('./voice');
-    const timeDesc = formatTimeForSpeech(new Date(timestampMillis));
+    const timeDesc = formatTimeForSpeech(time);
     speak(`Reminder set for ${timeDesc}: ${options.title}`);
     
     return result;
   } catch (error) {
-    console.error('[Reminders] Failed:', error);
+    console.error('[Reminders] ❌ Failed to set reminder:', error);
+    console.error('[Reminders] Error type:', typeof error);
+    console.error('[Reminders] Error message:', error instanceof Error ? error.message : JSON.stringify(error));
     throw error;
   }
 }
