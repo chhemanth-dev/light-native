@@ -74,7 +74,7 @@ class WakeWordModule(
         recognizer = null
     }
 
-    private fun scheduleRestart(delayMs: Long = 700L) {
+    private fun scheduleRestart(delayMs: Long = 3000L) {
         uiHandler.postDelayed({
             if (!isListening) return@postDelayed
             try {
@@ -100,9 +100,9 @@ class WakeWordModule(
     override fun onResults(results: Bundle) {
         val t = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
         if (t.isNotBlank()) sendPartial(t)
-        if (isListening) scheduleRestart(300)
+        if (isListening) scheduleRestart(2000)
     }
-    override fun onError(error: Int) { if (isListening) scheduleRestart(700) }
+    override fun onError(error: Int) { if (isListening) scheduleRestart(3000) }
     override fun onReadyForSpeech(params: Bundle?) {}
     override fun onBeginningOfSpeech() {}
     override fun onRmsChanged(rmsdB: Float) {}

@@ -100,26 +100,65 @@ class FloatingAssistantManager {
   }
 
   /**
-   * Handle orb tap - start listening
+   * Handle orb tap - start listening and execute commands
    */
   private async onOrbTapped(): Promise<void> {
     try {
       await this.updateStatus('Listening...');
       
-      // Start listening via assistant
-      // This will work from ANY app!
-      const { useAssistant } = await import('../hooks/useAssistant');
-      // Note: We need to bridge this to the service
+      console.log('[FloatingAssistant] 🎤 Orb tapped - starting voice recognition');
       
-      await this.updateStatus('Listening...');
+      // Import speech recognition
+      const { startListening, stopListening } = await import('./speech');
       
-      // For now, send intent to open app
-      // TODO: Implement in-overlay speech recognition
-      await FloatingAssistantModule.openMainApp();
+      // Start listening for voice input
+      const transcript = await new Promise<string>((resolve, reject) => {
+        let timeout: NodeJS.Timeout;
+        
+        const cleanup = startListening({
+          onResult: (text) => {
+            console.log('[FloatingAssistant] Got transcript:', text);
+            clearTimeout(timeout);
+            stopListening();
+            resolve(text);
+          },
+          onError: (error) => {
+            console.error('[FloatingAssistant] Speech error:', error);
+            clearTimeout(timeout);
+            reject(error);
+          },
+          onTimeout: () => {
+            console.log('[FloatingAssistant] Speech timeout');
+            clearTimeout(timeout);
+            reject(new Error('Timeout'));
+          }
+        });
+        
+        // 10 second timeout
+        timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Timeout'));
+        }, 10000);
+      });
+      
+      if (transcript && transcript.trim()) {
+        console.log('[FloatingAssistant] Processing command:', transcript);
+        await this.updateStatus('Processing...');
+        
+        // Execute the command through the assistant
+        await assistant.handleInput(transcript);
+        
+        await this.updateStatus('Done!');
+        setTimeout(() => this.updateStatus('Tap to speak'), 2000);
+      } else {
+        await this.updateStatus('No speech detected');
+        setTimeout(() => this.updateStatus('Tap to speak'), 2000);
+      }
       
     } catch (error) {
       console.error('[FloatingAssistant] Error handling tap:', error);
       await this.updateStatus('Error');
+      setTimeout(() => this.updateStatus('Tap to speak'), 2000);
     }
   }
 

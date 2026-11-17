@@ -1,13 +1,14 @@
 /**
  * Light AI Service
  * Complete autonomous AI system - no external APIs needed
- * Combines: Pattern Learning + Brain (web search) + Teacher (user demonstrations)
+ * Combines: Pattern Learning + Brain (web search) + Teacher (user demonstrations) + EXECUTION
  */
 
 import { patternLearner } from './light-pattern-learner';
 import { lightBrain } from './light-brain';
 import { lightTeacher } from './light-teacher';
 import { storageManager } from './light-storage-manager';
+import { actionExecutor } from './light-action-executor';
 
 export interface LightAIResponse {
   text: string;
@@ -130,47 +131,22 @@ export class LightAIService {
 
   /**
    * Execute an action based on recognized intent
+   * THIS IS WHERE LIGHT ACTUALLY DOES THINGS!
    */
   async executeAction(intent: string, userMessage: string): Promise<boolean> {
     console.log(`🎬 Executing action for intent: ${intent}`);
 
     try {
-      // Check if we learned how to execute this from the user
-      const demonstration = await lightTeacher.findMatchingDemonstration(userMessage);
+      // Use the action executor to actually perform the task
+      const result = await actionExecutor.execute(intent, userMessage);
       
-      if (demonstration) {
-        console.log('✅ Executing user-taught steps');
-        // In a real implementation, this would trigger actual app actions
-        // For now, we just log the steps
-        console.log('Steps:', demonstration.steps);
+      if (result.success) {
+        console.log('✅ Action executed successfully:', result.message);
         return true;
+      } else {
+        console.log('❌ Action failed:', result.message, result.error);
+        return false;
       }
-
-      // Check brain's knowledge base for instructions
-      const knowledge = await lightBrain.recall(userMessage);
-      
-      if (knowledge.length > 0) {
-        console.log('✅ Found instructions in knowledge base');
-        // Execute based on stored knowledge
-        return true;
-      }
-
-      // Search web for instructions
-      const webResults = await lightBrain.search(userMessage + ' how to');
-      
-      if (webResults.length > 0) {
-        console.log('✅ Found instructions on web');
-        // Store for future use
-        await lightBrain.storeKnowledge({
-          query: userMessage,
-          answer: webResults[0].snippet,
-          source: webResults[0].link,
-          confidence: 0.7,
-        });
-        return true;
-      }
-
-      return false;
     } catch (error) {
       console.error('❌ Error executing action:', error);
       return false;

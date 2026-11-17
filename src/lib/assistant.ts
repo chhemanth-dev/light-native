@@ -176,14 +176,24 @@ export class LightAssistant {
         this.history.push({ role: "assistant", content: lightResponse.text });
         
         // Execute action if Light AI recognized one
-        if (lightResponse.action) {
-          console.log("[Assistant] 🎯 Executing Light AI action:", lightResponse.action);
-          await lightAI.executeAction(lightResponse.intent || '', userText);
+        if (lightResponse.intent || lightResponse.action) {
+          console.log("[Assistant] 🎯 Executing action:", lightResponse.intent || lightResponse.action);
+          
+          // Use the action executor to actually perform the task
+          const executed = await lightAI.executeAction(
+            lightResponse.intent || 'unknown',
+            userText
+          );
+          
+          if (executed) {
+            console.log("[Assistant] ✅ Action executed successfully!");
+          } else {
+            console.log("[Assistant] ⚠️ Action execution failed or not applicable");
+          }
         }
         
         // If Light AI suggests teaching mode
         if (lightResponse.requiresTeaching) {
-          // User can teach Light AI through a future interaction
           console.log("[Assistant] 📚 Light AI needs teaching for this task");
         }
         
@@ -191,9 +201,8 @@ export class LightAssistant {
         return;
       } catch (lightError) {
         console.warn("[Assistant] ⚠️ Light AI failed:", lightError);
-        // If Light AI completely fails, show a helpful message
         await this.respond(
-          "I'm having trouble understanding that. Could you try asking in a different way? Or check if I need more training data.",
+          "I'm having trouble understanding that. Could you try asking in a different way?",
           true
         );
         return;
