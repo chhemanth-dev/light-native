@@ -244,34 +244,126 @@ export class LightActionExecutor {
   }
 
   /**
-   * Execute set reminder
+   * Execute set reminder - BULLETPROOF VERSION
    */
   private async executeSetReminder(input: string, params: any): Promise<ExecutionResult> {
     try {
-      console.log('[Executor] Setting reminder...');
+      console.log('[Executor] ⏰ Setting reminder from:', input);
 
-      const parsed = parseReminderFromSpeech(input);
+      // Try multiple parsing strategies
+      let parsed = null;
+      
+      // Strategy 1: Use parseReminderFromSpeech (reminders.ts)
+      parsed = parseReminderFromSpeech(input);
+      console.log('[Executor] parseReminderFromSpeech result:', parsed);
+      
+      // Strategy 2: If that failed, try local parser
+      if (!parsed) {
+        const { parseReminderLocally } = await import('./local-parser');
+        const localParsed = parseReminderLocally(input);
+        console.log('[Executor] parseReminderLocally result:', localParsed);
+        
+        if (localParsed) {
+          // Convert local format to reminder format
+          const fireAt = Date.now() + (localParsed.minutes * 60 * 1000);
+          parsed = {
+            id: Date.now().toString(),
+            title: localParsed.title,
+            time: fireAt,
+            repeatInterval: null,
+          };
+        }
+      }
+
+      // Strategy 3: Extract manually with regex if all else fails
+      if (!parsed) {
+        console.log('[Executor] Trying manual extraction...');
+        const manualParsed = this.manualReminderExtraction(input);
+        if (manualParsed) {
+          parsed = manualParsed;
+        }
+      }
 
       if (!parsed) {
+        console.error('[Executor] ❌ All parsing strategies failed');
         return {
           success: false,
-          message: "I couldn't understand the reminder time. Try saying 'remind me in 30 minutes to...' or 'remind me at 3pm to...'",
+          message: "I couldn't understand the reminder time. Try saying 'remind me in 30 minutes to call mom' or 'remind me at 3pm to check email'",
         };
       }
 
-      await scheduleReminder(parsed);
+      console.log('[Executor] ✅ Parsed reminder:', JSON.stringify(parsed, null, 2));
+
+      // Schedule it!
+      const result = await scheduleReminder(parsed);
+      console.log('[Executor] ✅ Reminder scheduled:', result);
+
+      // Format response
+      let timeDesc = '';
+      if (typeof parsed.time === 'number') {
+        const minutesFromNow = Math.round((parsed.time - Date.now()) / 60000);
+        if (minutesFromNow < 60) {
+          timeDesc = `in ${minutesFromNow} minute${minutesFromNow !== 1 ? 's' : ''}`;
+        } else {
+          const hours = Math.floor(minutesFromNow / 60);
+          timeDesc = `in ${hours} hour${hours !== 1 ? 's' : ''}`;
+        }
+      } else {
+        timeDesc = 'at ' + new Date(parsed.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      }
 
       return {
         success: true,
-        message: `Reminder set: ${parsed.title}`,
+        message: `Reminder set ${timeDesc}: "${parsed.title}", sir.`,
       };
     } catch (error) {
+      console.error('[Executor] ❌ Error setting reminder:', error);
+      console.error('[Executor] Error stack:', error instanceof Error ? error.stack : 'no stack');
       return {
         success: false,
-        message: 'Failed to set reminder',
+        message: 'Failed to set reminder: ' + (error instanceof Error ? error.message : 'Unknown error'),
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  /**
+   * Manual reminder extraction as last resort
+   */
+  private manualReminderExtraction(input: string): any | null {
+    const lower = input.toLowerCase();
+    
+    // Extract time in minutes
+    let minutes = 0;
+    
+    // "in X minutes"
+    const minMatch = lower.match(/in (\d+) (?:minute|min)/);
+    if (minMatch) {
+      minutes = parseInt(minMatch[1]);
+    }
+    
+    // "in X hours"
+    const hourMatch = lower.match(/in (\d+) (?:hour|hr)/);
+    if (hourMatch) {
+      minutes = parseInt(hourMatch[1]) * 60;
+    }
+    
+    // Extract title
+    let title = input;
+    title = title.replace(/remind me to|remind to|reminder to|set reminder|remind me|reminder/gi, '').trim();
+    title = title.replace(/in \d+ (?:minute|min|hour|hr)s?/gi, '').trim();
+    title = title.replace(/^to\s+/i, '').trim();
+    
+    if (minutes > 0 && title) {
+      return {
+        id: Date.now().toString(),
+        title: title,
+        time: Date.now() + (minutes * 60 * 1000),
+        repeatInterval: null,
+      };
+    }
+    
+    return null;
   }
 
   /**

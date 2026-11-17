@@ -20,6 +20,7 @@
  */
 import { ask, type AIMessage } from "./gemini";
 import { lightAI } from "./light-ai-service";
+import { actionExecutor } from "./light-action-executor";
 import { guidedExecutor } from "./light-guided-executor";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
@@ -153,6 +154,18 @@ export class LightAssistant {
         return;
       }
 
+      // ========================================
+      // UNIVERSAL ACTION EXECUTOR - JUST DO IT!
+      // Try to execute ANYTHING as an action first
+      // ========================================
+      console.log("[Assistant] 🚀 Attempting direct execution...");
+      const directExecution = await this.tryDirectExecution(userText);
+      if (directExecution) {
+        console.log("[Assistant] ✅ Direct execution succeeded!");
+        await this.respond(directExecution, true);
+        return;
+      }
+
       console.log("[Assistant] Building context...");
       const context = await this.buildContext(userText);
       console.log("[Assistant] Context length:", context.length);
@@ -272,6 +285,147 @@ export class LightAssistant {
         },
       });
     });
+  }
+
+  /**
+   * UNIVERSAL DIRECT EXECUTION
+   * Try to execute command immediately without relying on intent detection
+   * This gives Light INFINITE capabilities - just pattern match and execute!
+   */
+  private async tryDirectExecution(text: string): Promise<string | null> {
+    const lower = text.toLowerCase().trim();
+    console.log("[Assistant] 🎯 Trying direct execution for:", lower);
+
+    // ========================================
+    // REMINDER - Any time-based command
+    // ========================================
+    if (lower.match(/remind|reminder|in \d+|at \d+|tomorrow|later|tonight/)) {
+      console.log("[Assistant] 🎯 Detected: REMINDER");
+      const result = await actionExecutor.execute('set_reminder', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // CALL - Any call command
+    // ========================================
+    if (lower.match(/call|dial|phone|ring/)) {
+      console.log("[Assistant] 🎯 Detected: CALL");
+      const result = await actionExecutor.execute('make_call', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // MESSAGE - Send message via WhatsApp/SMS
+    // ========================================
+    if (lower.match(/message|text|whatsapp|send|sms/)) {
+      console.log("[Assistant] 🎯 Detected: MESSAGE");
+      const result = await actionExecutor.execute('send_message', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // OPEN APP - Launch any application
+    // ========================================
+    if (lower.match(/open|launch|start|go to/) && lower.match(/app|instagram|youtube|spotify|facebook|twitter|tiktok|netflix|gmail|maps|chrome|camera|gallery|settings|calculator|calendar/)) {
+      console.log("[Assistant] 🎯 Detected: OPEN APP");
+      const result = await actionExecutor.execute('open_app', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // WEB SEARCH - Search online
+    // ========================================
+    if (lower.match(/search|google|look up|find out|what is|who is|how to|tell me about/) || lower.includes('?')) {
+      console.log("[Assistant] 🎯 Detected: WEB SEARCH");
+      const result = await actionExecutor.execute('web_search', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // CAMERA/PHOTO
+    // ========================================
+    if (lower.match(/camera|photo|picture|take|selfie|snap/)) {
+      console.log("[Assistant] 🎯 Detected: CAMERA");
+      const result = await actionExecutor.execute('take_photo', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // MUSIC
+    // ========================================
+    if (lower.match(/music|song|play|spotify|youtube music/)) {
+      console.log("[Assistant] 🎯 Detected: MUSIC");
+      const result = await actionExecutor.execute('play_music', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // WIFI/BLUETOOTH
+    // ========================================
+    if (lower.match(/wifi|wi-fi|wireless|internet/)) {
+      console.log("[Assistant] 🎯 Detected: WIFI");
+      const intent = lower.match(/turn on|enable|on/) ? 'enable_wifi' : 'disable_wifi';
+      const result = await actionExecutor.execute(intent, text);
+      if (result.success) return result.message;
+    }
+
+    if (lower.match(/bluetooth|bt/)) {
+      console.log("[Assistant] 🎯 Detected: BLUETOOTH");
+      const intent = lower.match(/turn on|enable|on/) ? 'enable_bluetooth' : 'disable_bluetooth';
+      const result = await actionExecutor.execute(intent, text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // TIME/DATE/WEATHER
+    // ========================================
+    if (lower.match(/what.*time|current time/)) {
+      console.log("[Assistant] 🎯 Detected: TIME");
+      const result = await actionExecutor.execute('get_time', text);
+      if (result.success) return result.message;
+    }
+
+    if (lower.match(/what.*date|today|day is it/)) {
+      console.log("[Assistant] 🎯 Detected: DATE");
+      const result = await actionExecutor.execute('get_date', text);
+      if (result.success) return result.message;
+    }
+
+    if (lower.match(/weather|temperature|forecast|rain|sunny|cold|hot/)) {
+      console.log("[Assistant] 🎯 Detected: WEATHER");
+      const result = await actionExecutor.execute('get_weather', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // CALCULATOR
+    // ========================================
+    if (lower.match(/calculate|what is \d+|how much is|\+|\-|\*|\/|times|plus|minus|divided/)) {
+      console.log("[Assistant] 🎯 Detected: CALCULATE");
+      const result = await actionExecutor.execute('calculate', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // READ MESSAGES
+    // ========================================
+    if (lower.match(/read.*message|check.*message|any message|show message/)) {
+      console.log("[Assistant] 🎯 Detected: READ MESSAGES");
+      const result = await actionExecutor.execute('read_messages', text);
+      if (result.success) return result.message;
+    }
+
+    // ========================================
+    // URLS
+    // ========================================
+    if (lower.match(/http|www\.|\.com|\.org|\.net/) || lower.includes('://')) {
+      console.log("[Assistant] 🎯 Detected: URL");
+      const result = await actionExecutor.execute('open_url', text);
+      if (result.success) return result.message;
+    }
+
+    console.log("[Assistant] ⚠️ No direct execution match found");
+    return null;
   }
 
   private async handleLocalIntent(text: string): Promise<string | null> {
