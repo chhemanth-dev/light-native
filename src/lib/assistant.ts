@@ -155,15 +155,19 @@ export class LightAssistant {
       }
 
       // ========================================
-      // UNIVERSAL ACTION EXECUTOR - JUST DO IT!
-      // Try to execute ANYTHING as an action first
+      // SMART EXECUTION - Only for OBVIOUS commands
+      // Let Light AI think for everything else!
       // ========================================
-      console.log("[Assistant] 🚀 Attempting direct execution...");
-      const directExecution = await this.tryDirectExecution(userText);
-      if (directExecution) {
-        console.log("[Assistant] ✅ Direct execution succeeded!");
-        await this.respond(directExecution, true);
-        return;
+      if (this.isObviousCommand(userText)) {
+        console.log("[Assistant] 🎯 Obvious command detected, executing directly...");
+        const directExecution = await this.tryDirectExecution(userText);
+        if (directExecution) {
+          console.log("[Assistant] ✅ Direct execution succeeded!");
+          await this.respond(directExecution, true);
+          return;
+        }
+      } else {
+        console.log("[Assistant] 🧠 Not an obvious command - letting Light AI think...");
       }
 
       console.log("[Assistant] Building context...");
@@ -176,38 +180,44 @@ export class LightAssistant {
       this.history.push({ role: "user", content: userText });
 
       // ========================================
-      // ALWAYS USE LIGHT AI FIRST (NO API COSTS!)
+      // LIGHT AI - SMART, CONVERSATIONAL, CAPABLE
       // ========================================
-      console.log("[Assistant] 💡 Using Light AI (FREE, no API needed)...");
+      console.log("[Assistant] 💡 Consulting Light AI...");
       
       try {
         const lightResponse = await lightAI.chat(userText);
         console.log("[Assistant] ✅ Light AI response received!");
         console.log("[Assistant] Source:", lightResponse.source);
+        console.log("[Assistant] Confidence:", lightResponse.confidence);
         console.log("[Assistant] Response:", lightResponse.text.substring(0, 100));
         
         this.history.push({ role: "assistant", content: lightResponse.text });
         
         // Execute action if Light AI recognized one
         if (lightResponse.intent || lightResponse.action) {
-          console.log("[Assistant] 🎯 Executing action:", lightResponse.intent || lightResponse.action);
+          console.log("[Assistant] 🎯 Light AI identified action:", lightResponse.intent || lightResponse.action);
           
-          // Use the action executor to actually perform the task
-          const executed = await lightAI.executeAction(
-            lightResponse.intent || 'unknown',
-            userText
-          );
-          
-          if (executed) {
-            console.log("[Assistant] ✅ Action executed successfully!");
+          // Only execute if confidence is high enough
+          if ((lightResponse.confidence || 0) > 0.7) {
+            console.log("[Assistant] ✅ High confidence - executing action");
+            const executed = await lightAI.executeAction(
+              lightResponse.intent || 'unknown',
+              userText
+            );
+            
+            if (executed) {
+              console.log("[Assistant] ✅ Action executed successfully!");
+            } else {
+              console.log("[Assistant] ⚠️ Action execution failed");
+            }
           } else {
-            console.log("[Assistant] ⚠️ Action execution failed or not applicable");
+            console.log("[Assistant] ⚠️ Confidence too low - not executing action");
           }
         }
         
         // If Light AI suggests teaching mode
         if (lightResponse.requiresTeaching) {
-          console.log("[Assistant] 📚 Light AI needs teaching for this task");
+          console.log("[Assistant] 📚 Light AI suggests learning from user");
         }
         
         await this.respond(lightResponse.text, false);
@@ -215,7 +225,7 @@ export class LightAssistant {
       } catch (lightError) {
         console.warn("[Assistant] ⚠️ Light AI failed:", lightError);
         await this.respond(
-          "I'm having trouble understanding that. Could you try asking in a different way?",
+          "I'm having trouble with that, sir. Could you try asking in a different way?",
           true
         );
         return;
@@ -285,6 +295,47 @@ export class LightAssistant {
         },
       });
     });
+  }
+
+  /**
+   * Check if this is an obvious command (not a question or conversation)
+   * Only execute directly for CLEAR commands, let AI think for everything else
+   */
+  private isObviousCommand(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    
+    // Questions and conversations should go to AI, not direct execution
+    if (lower.includes('?') || 
+        lower.startsWith('what ') || 
+        lower.startsWith('who ') || 
+        lower.startsWith('where ') || 
+        lower.startsWith('when ') || 
+        lower.startsWith('why ') || 
+        lower.startsWith('how ') ||
+        lower.startsWith('can you') ||
+        lower.startsWith('could you') ||
+        lower.startsWith('would you') ||
+        lower.startsWith('should i') ||
+        lower.startsWith('tell me') ||
+        lower.startsWith('explain') ||
+        lower.startsWith('i want to') ||
+        lower.startsWith('i need to') ||
+        lower.startsWith('help me')) {
+      return false; // Let AI think about these
+    }
+    
+    // Only these are "obvious" commands that skip AI:
+    // 1. Explicit action verbs with clear targets
+    const obviousPatterns = [
+      /^(call|dial|phone)\s+\d+/, // "call 123456" (with number)
+      /^(open|launch|start)\s+(instagram|youtube|spotify|camera|settings)/, // "open instagram"
+      /^remind me (in|at|to)/, // "remind me in 5 minutes"
+      /^(turn on|turn off|enable|disable)\s+(wifi|bluetooth)/, // "turn on wifi"
+      /^take (a |)photo/, // "take photo"
+      /^play music/, // "play music"
+    ];
+    
+    return obviousPatterns.some(pattern => pattern.test(lower));
   }
 
   /**
