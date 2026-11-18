@@ -2,7 +2,7 @@
  * Light Brain - Autonomous Learning AI Agent
  * 
  * This AI agent:
- * 1. Searches the web for how to perform tasks
+ * 1. Searches the web for how to perform tasks (ENHANCED MULTI-SOURCE)
  * 2. Learns from successful executions
  * 3. Builds a knowledge base in the app
  * 4. Executes tasks without API calls
@@ -10,6 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SQLite from 'expo-sqlite';
+import { webSearchEngine } from './light-web-search-engine';
 
 interface TaskKnowledge {
   id: string;
@@ -34,55 +35,259 @@ interface WebSearchResult {
   title: string;
   snippet: string;
   url: string;
+  link?: string;
   instructions?: string[];
 }
 
+interface StoredKnowledge {
+  query: string;
+  answer: string;
+  source: string;
+  confidence: number;
+  timestamp?: number;
+}
+
 export class LightBrain {
-  private db: SQLite.SQLiteDatabase;
+  private db: SQLite.SQLiteDatabase | null = null;
   private knowledgeBase: Map<string, TaskKnowledge>;
   private learningMode: boolean;
+  private initialized: boolean = false;
+  private knowledgeCache: Map<string, StoredKnowledge> = new Map();
 
   constructor() {
     this.knowledgeBase = new Map();
     this.learningMode = true;
-    this.initializeDatabase();
+  }
+
+  /**
+   * Initialize Light Brain
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      await this.initializeDatabase();
+      await this.loadKnowledgeCache();
+      this.initialized = true;
+      console.log('✅ Light Brain initialized');
+    } catch (error) {
+      console.error('❌ Light Brain initialization error:', error);
+      this.initialized = true; // Continue anyway with limited functionality
+    }
   }
 
   private async initializeDatabase() {
-    this.db = await SQLite.openDatabaseAsync('light_brain.db');
-    
-    await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS task_knowledge (
-        id TEXT PRIMARY KEY,
-        task_type TEXT,
-        user_query TEXT,
-        learned_method TEXT,
-        action_steps TEXT,
-        success_rate REAL,
-        last_used INTEGER,
-        times_executed INTEGER,
-        source TEXT
+    try {
+      this.db = await SQLite.openDatabaseAsync('light_brain.db');
+      
+      await this.db.execAsync(`
+        CREATE TABLE IF NOT EXISTS task_knowledge (
+          id TEXT PRIMARY KEY,
+          task_type TEXT,
+          user_query TEXT,
+          learned_method TEXT,
+          action_steps TEXT,
+          success_rate REAL,
+          last_used INTEGER,
+          times_executed INTEGER,
+          source TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS execution_history (
+          id TEXT PRIMARY KEY,
+          task_id TEXT,
+          timestamp INTEGER,
+          success INTEGER,
+          user_feedback TEXT,
+          execution_time INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS learning_queue (
+          id TEXT PRIMARY KEY,
+          query TEXT,
+          priority INTEGER,
+          status TEXT,
+          created_at INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS stored_knowledge (
+          id TEXT PRIMARY KEY,
+          query TEXT,
+          answer TEXT,
+          source TEXT,
+          confidence REAL,
+          timestamp INTEGER
+        );
+      `);
+
+      await this.loadKnowledgeBase();
+    } catch (error) {
+      console.error('[Light Brain] Database initialization error:', error);
+      // Continue without database - will use in-memory only
+    }
+  }
+
+  /**
+   * ENHANCED WEB SEARCH - Uses multi-source search engine
+   * This is what Light AI calls for web searches
+   */
+  async search(query: string): Promise<WebSearchResult[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    console.log('[Light Brain] Searching web for:', query);
+
+    try {
+      // Use enhanced multi-source search
+      const enhancedResults = await webSearchEngine.enhancedSearch(query);
+
+      // Convert to WebSearchResult format
+      const results: WebSearchResult[] = enhancedResults.sources.map(source => ({
+        title: source.title,
+        snippet: source.snippet,
+        url: source.link,
+        link: source.link,
+        instructions: [],
+      }));
+
+      // Add synthesized answer as first result if no direct results
+      if (results.length === 0 && enhancedResults.mainAnswer) {
+        results.push({
+          title: query,
+          snippet: enhancedResults.mainAnswer,
+          url: enhancedResults.sources[0]?.link || '',
+          link: enhancedResults.sources[0]?.link || '',
+          instructions: enhancedResults.synthesizedInfo.keyPoints,
+        });
+      }
+
+      console.log('[Light Brain] Found', results.length, 'results');
+      return results;
+    } catch (error) {
+      console.error('[Light Brain] Search error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Store knowledge for future recall
+   */
+  async storeKnowledge(knowledge: StoredKnowledge): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    try {
+      const id = Date.now().toString();
+      const timestamp = Date.now();
+
+      // Store in cache
+      this.knowledgeCache.set(knowledge.query.toLowerCase(), {
+        ...knowledge,
+        timestamp,
+      });
+
+      // Store in database if available
+      if (this.db) {
+        await this.db.runAsync(
+          `INSERT OR REPLACE INTO stored_knowledge (id, query, answer, source, confidence, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [id, knowledge.query, knowledge.answer, knowledge.source, knowledge.confidence, timestamp]
+        );
+      }
+
+      console.log('[Light Brain] Stored knowledge:', knowledge.query.substring(0, 50));
+    } catch (error) {
+      console.error('[Light Brain] Error storing knowledge:', error);
+    }
+  }
+
+  /**
+   * Recall stored knowledge
+   */
+  async recall(query: string): Promise<StoredKnowledge[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    try {
+      const lowerQuery = query.toLowerCase();
+      const results: StoredKnowledge[] = [];
+
+      // Check cache first
+      for (const [key, value] of this.knowledgeCache.entries()) {
+        if (key.includes(lowerQuery) || lowerQuery.includes(key)) {
+          results.push(value);
+        }
+      }
+
+      // If cache has results, return them
+      if (results.length > 0) {
+        return results.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+      }
+
+      // Otherwise check database
+      if (this.db) {
+        const rows = await this.db.getAllAsync<any>(
+          `SELECT * FROM stored_knowledge 
+           WHERE query LIKE ? OR answer LIKE ?
+           ORDER BY confidence DESC, timestamp DESC
+           LIMIT 5`,
+          [`%${query}%`, `%${query}%`]
+        );
+
+        for (const row of rows) {
+          const knowledge: StoredKnowledge = {
+            query: row.query,
+            answer: row.answer,
+            source: row.source,
+            confidence: row.confidence,
+            timestamp: row.timestamp,
+          };
+          results.push(knowledge);
+          
+          // Add to cache
+          this.knowledgeCache.set(row.query.toLowerCase(), knowledge);
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('[Light Brain] Error recalling knowledge:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Load knowledge cache from database
+   */
+  private async loadKnowledgeCache(): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      const rows = await this.db.getAllAsync<any>(
+        `SELECT * FROM stored_knowledge 
+         WHERE timestamp > ?
+         ORDER BY timestamp DESC
+         LIMIT 100`,
+        [Date.now() - 7 * 24 * 60 * 60 * 1000] // Last 7 days
       );
 
-      CREATE TABLE IF NOT EXISTS execution_history (
-        id TEXT PRIMARY KEY,
-        task_id TEXT,
-        timestamp INTEGER,
-        success INTEGER,
-        user_feedback TEXT,
-        execution_time INTEGER
-      );
+      for (const row of rows) {
+        this.knowledgeCache.set(row.query.toLowerCase(), {
+          query: row.query,
+          answer: row.answer,
+          source: row.source,
+          confidence: row.confidence,
+          timestamp: row.timestamp,
+        });
+      }
 
-      CREATE TABLE IF NOT EXISTS learning_queue (
-        id TEXT PRIMARY KEY,
-        query TEXT,
-        priority INTEGER,
-        status TEXT,
-        created_at INTEGER
-      );
-    `);
-
-    await this.loadKnowledgeBase();
+      console.log('[Light Brain] Loaded', this.knowledgeCache.size, 'cached items');
+    } catch (error) {
+      console.warn('[Light Brain] Could not load cache:', error);
+    }
   }
 
   /**

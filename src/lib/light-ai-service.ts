@@ -170,10 +170,10 @@ export class LightAIService {
       // Greetings
       { input: 'hello', intent: 'greeting', response: 'Hello sir! How can I help you?' },
       { input: 'hi', intent: 'greeting', response: 'Hi sir! What can I do for you?' },
-      { input: 'hey light', intent: 'greeting', response: 'Yes sir, I'm here!' },
+      { input: 'hey light', intent: 'greeting', response: 'Yes sir, I am here!' },
       
       // Thanks
-      { input: 'thank you', intent: 'thanks', response: 'You're welcome, sir!' },
+      { input: 'thank you', intent: 'thanks', response: 'You are welcome, sir!' },
       { input: 'thanks', intent: 'thanks', response: 'Happy to help, sir!' },
       
       // Confirmations
@@ -191,7 +191,7 @@ export class LightAIService {
       { input: 'what can you do', intent: 'help', response: 'I can set reminders, make calls, open apps, search the web, answer questions, and learn from you. Just ask!' },
       
       // Common questions
-      { input: 'are you there', intent: 'presence', response: 'Yes sir, I'm always here!' },
+      { input: 'are you there', intent: 'presence', response: 'Yes sir, I am always here!' },
       { input: 'can you hear me', intent: 'presence', response: 'Yes sir, I can hear you perfectly!' },
       
       // Reminders
@@ -380,7 +380,7 @@ export class LightAIService {
         // Add confidence indicator
         const confidenceLevel = enhancedResults.synthesizedInfo.confidence;
         if (confidenceLevel > 0.8) {
-          answer = `I'm confident about this, sir:\n\n` + answer;
+          answer = `I am confident about this, sir:\n\n` + answer;
         } else if (confidenceLevel > 0.6) {
           answer = `Based on what I found, sir:\n\n` + answer;
         } else {
@@ -432,7 +432,7 @@ export class LightAIService {
     }
     
     if (intent === 'question') {
-      return "I want to help you with that, sir. Could you provide more details about what you're asking?";
+      return "I want to help you with that, sir. Could you provide more details about what you are asking?";
     }
     
     return "Could you clarify that for me, sir? I want to make sure I understand correctly.";
@@ -445,14 +445,14 @@ export class LightAIService {
     const { sentiment, intent } = understanding;
     
     if (sentiment === 'negative') {
-      return "I sense you might be frustrated, sir. I'm still learning, but I want to help. Could you rephrase that, or would you like to teach me how to handle this?";
+      return "I sense you might be frustrated, sir. I am still learning, but I want to help. Could you rephrase that, or would you like to teach me how to handle this?";
     }
     
     if (intent === 'question') {
-      return "That's an interesting question, sir. I don't have a good answer yet, but I can search the web for information. Would you like me to do that?";
+      return "That is an interesting question, sir. I do not have a good answer yet, but I can search the web for information. Would you like me to do that?";
     }
     
-    return "I'm not sure about that yet, sir. Could you help me understand, or should I search the web for more information?";
+    return "I am not sure about that yet, sir. Could you help me understand, or should I search the web for more information?";
   }
 
   /**
@@ -550,7 +550,7 @@ export class LightAIService {
       
       // Add conversational follow-up based on understanding
       if (understanding && understanding.sentiment === 'positive') {
-        answer += ' Is there anything else you'd like to know about this, sir?';
+        answer += ' Is there anything else you would like to know about this, sir?';
       } else if (results.length > 1) {
         answer += ` I found ${results.length} sources with similar information if you need more detail, sir.`;
       }
@@ -579,7 +579,7 @@ export class LightAIService {
     
     // Self-introduction
     if (lower.includes('who are you') || lower.includes('about yourself')) {
-      return "I'm Light, your personal AI assistant, sir. I'm designed to help you with tasks, answer questions, control your phone, and learn from our conversations. I work entirely on your device, I'm fast, and I never forget. Think of me as your JARVIS - always ready, always capable.";
+      return "I am Light, your personal AI assistant, sir. I am designed to help you with tasks, answer questions, control your phone, and learn from our conversations. I work entirely on your device, I am fast, and I never forget. Think of me as your JARVIS - always ready, always capable.";
     }
     
     if (lower.includes('what can you do') || lower.includes('your capabilities')) {
@@ -589,14 +589,14 @@ export class LightAIService {
     // Advice questions with empathy
     if (lower.includes('should i')) {
       if (sentiment === 'negative') {
-        return "I can tell this is weighing on you, sir. While I can't make the decision for you, I can help you think it through. What are the key factors you're considering?";
+        return "I can tell this is weighing on you, sir. While I cannot make the decision for you, I can help you think it through. What are the key factors you are considering?";
       }
-      return "That's a personal decision, sir. I can provide information to help you decide, but ultimately you know what's best for your situation. What specific information would help you make this decision?";
+      return "That is a personal decision, sir. I can provide information to help you decide, but ultimately you know what is best for your situation. What specific information would help you make this decision?";
     }
     
     // Opinion questions
     if (lower.includes('what do you think')) {
-      return "I can provide information and different perspectives, sir, but I don't have personal opinions in the human sense. What would be most helpful - factual information, various viewpoints, or specific analysis?";
+      return "I can provide information and different perspectives, sir, but I do not have personal opinions in the human sense. What would be most helpful - factual information, various viewpoints, or specific analysis?";
     }
     
     // Emotional support
@@ -605,17 +605,17 @@ export class LightAIService {
         return "I understand, sir. Rest is important. Is there anything I can help you with to make things easier right now?";
       }
       if (lower.includes('stressed') || lower.includes('worried')) {
-        return "I'm here to help reduce that stress, sir. What can I take off your plate?";
+        return "I am here to help reduce that stress, sir. What can I take off your plate?";
       }
     }
     
     // Positive reinforcement
     if (sentiment === 'positive') {
-      return "That's great to hear, sir! I'm always happy to help. What else can I do for you today?";
+      return "That is great to hear, sir! I am always happy to help. What else can I do for you today?";
     }
     
     // Fallback personality response
-    return "I'm here to assist with that, sir. Could you tell me more about what you're looking for?";
+    return "I am here to assist with that, sir. Could you tell me more about what you are looking for?";
   }
 
   /**
@@ -731,16 +731,16 @@ export class LightAIService {
       conversation_greeting: [
         "Hello! How can I help you?",
         "Hi there! What can I do for you?",
-        "Hey! I'm here to assist.",
+        "Hey! I am here to assist.",
       ],
       conversation_thanks: [
-        "You're welcome!",
+        "You are welcome!",
         "Happy to help!",
         "Anytime!",
       ],
       error_not_found: [
-        "I couldn't find that.",
-        "Sorry, I don't see that here.",
+        "I could not find that.",
+        "Sorry, I do not see that here.",
       ],
     };
 
