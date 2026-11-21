@@ -159,3 +159,6 @@ app/
     reminders.tsx      Upcoming reminders
     settings.tsx       Privacy & preferences
 ```
+
+
+<!-- Build triggered for light-glitch12 account with fresh GitHub Actions minutes -->
