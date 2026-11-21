@@ -1,8 +1,9 @@
-name: Android Build
+name: Android Build (DISABLED - Use build-apk.yml)
 
 on:
-  push:
-    branches: [ main ]
+  # Disabled automatic trigger to save minutes
+  # push:
+  #   branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
