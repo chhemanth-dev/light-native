@@ -4,6 +4,7 @@
  * Combines: Pattern Learning + Brain (web search) + Teacher (user demonstrations) + EXECUTION
  * MOBILE-OPTIMIZED: Fast, conversational, context-aware
  * ChatGPT-5 LEVEL: Rich understanding, reasoning, personality, ENHANCED WEB SEARCH
+ * HUMAN-LIKE: Natural conversation, understands context, remembers preferences
  */
 
 import { patternLearner, type TrainingExample } from './light-pattern-learner';
@@ -168,31 +169,31 @@ export class LightAIService {
   private async preloadMobileIntents(): Promise<void> {
     const commonIntents: TrainingExample[] = [
       // Greetings
-      { input: 'hello', intent: 'greeting', response: 'Hello sir! How can I help you?' },
-      { input: 'hi', intent: 'greeting', response: 'Hi sir! What can I do for you?' },
-      { input: 'hey light', intent: 'greeting', response: 'Yes sir, I am here!' },
+      { input: 'hello', intent: 'greeting', response: 'Hey! How can I help?' },
+      { input: 'hi', intent: 'greeting', response: 'Hi there! What can I do for you?' },
+      { input: 'hey light', intent: 'greeting', response: 'Yeah, I'm here!' },
       
       // Thanks
-      { input: 'thank you', intent: 'thanks', response: 'You are welcome, sir!' },
-      { input: 'thanks', intent: 'thanks', response: 'Happy to help, sir!' },
+      { input: 'thank you', intent: 'thanks', response: 'You're welcome!' },
+      { input: 'thanks', intent: 'thanks', response: 'Happy to help!' },
       
       // Confirmations
-      { input: 'yes', intent: 'confirm', response: 'Understood, sir.' },
-      { input: 'okay', intent: 'confirm', response: 'Got it, sir.' },
-      { input: 'sure', intent: 'confirm', response: 'Proceeding, sir.' },
+      { input: 'yes', intent: 'confirm', response: 'Got it.' },
+      { input: 'okay', intent: 'confirm', response: 'Understood.' },
+      { input: 'sure', intent: 'confirm', response: 'On it.' },
       
       // Cancellations
-      { input: 'cancel', intent: 'cancel', response: 'Cancelled, sir.' },
-      { input: 'stop', intent: 'cancel', response: 'Stopped, sir.' },
-      { input: 'never mind', intent: 'cancel', response: 'No problem, sir.' },
+      { input: 'cancel', intent: 'cancel', response: 'Cancelled.' },
+      { input: 'stop', intent: 'cancel', response: 'Stopped.' },
+      { input: 'never mind', intent: 'cancel', response: 'No problem.' },
       
       // Help
-      { input: 'help', intent: 'help', response: 'I can help with tasks, answer questions, control your phone, and more. What do you need, sir?' },
+      { input: 'help', intent: 'help', response: 'I can help with tasks, answer questions, control your phone, and more. What do you need?' },
       { input: 'what can you do', intent: 'help', response: 'I can set reminders, make calls, open apps, search the web, answer questions, and learn from you. Just ask!' },
       
       // Common questions
-      { input: 'are you there', intent: 'presence', response: 'Yes sir, I am always here!' },
-      { input: 'can you hear me', intent: 'presence', response: 'Yes sir, I can hear you perfectly!' },
+      { input: 'are you there', intent: 'presence', response: 'Yeah, I'm always here!' },
+      { input: 'can you hear me', intent: 'presence', response: 'Loud and clear!' },
       
       // Reminders
       { input: 'set reminder', intent: 'reminder_create', action: 'set_reminder' },
@@ -380,11 +381,11 @@ export class LightAIService {
         // Add confidence indicator
         const confidenceLevel = enhancedResults.synthesizedInfo.confidence;
         if (confidenceLevel > 0.8) {
-          answer = `I am confident about this, sir:\n\n` + answer;
+          answer = `I'm pretty confident about this:\n\n` + answer;
         } else if (confidenceLevel > 0.6) {
-          answer = `Based on what I found, sir:\n\n` + answer;
+          answer = `Based on what I found:\n\n` + answer;
         } else {
-          answer = `I found some information, though sources vary, sir:\n\n` + answer;
+          answer = `I found some info, though sources vary:\n\n` + answer;
         }
         
         // Store this knowledge for future use
@@ -413,7 +414,7 @@ export class LightAIService {
     } catch (error) {
       console.error('❌ Error processing message:', error);
       return {
-        text: "I encountered an error processing that, sir. Could you try rephrasing?",
+        text: "I ran into an error processing that. Could you try rephrasing?",
         source: 'fallback',
       };
     }
@@ -427,15 +428,15 @@ export class LightAIService {
     
     if (intent === 'command') {
       if (!entities.apps && !entities.names) {
-        return "I'd be happy to help, sir. Could you specify what you'd like me to do?";
+        return "I'd be happy to help. Could you specify what you'd like me to do?";
       }
     }
     
     if (intent === 'question') {
-      return "I want to help you with that, sir. Could you provide more details about what you are asking?";
+      return "I want to help with that. Could you provide more details about what you're asking?";
     }
     
-    return "Could you clarify that for me, sir? I want to make sure I understand correctly.";
+    return "Could you clarify that for me? I want to make sure I understand correctly.";
   }
 
   /**
@@ -445,14 +446,14 @@ export class LightAIService {
     const { sentiment, intent } = understanding;
     
     if (sentiment === 'negative') {
-      return "I sense you might be frustrated, sir. I am still learning, but I want to help. Could you rephrase that, or would you like to teach me how to handle this?";
+      return "I sense you might be frustrated. I'm still learning, but I want to help. Could you rephrase that, or would you like to teach me how to handle this?";
     }
     
     if (intent === 'question') {
-      return "That is an interesting question, sir. I do not have a good answer yet, but I can search the web for information. Would you like me to do that?";
+      return "That's an interesting question. I don't have a good answer yet, but I can search the web for information. Would you like me to do that?";
     }
     
-    return "I am not sure about that yet, sir. Could you help me understand, or should I search the web for more information?";
+    return "I'm not sure about that yet. Could you help me understand, or should I search the web for more information?";
   }
 
   /**
@@ -534,7 +535,7 @@ export class LightAIService {
    */
   private synthesizeAnswer(question: string, results: any[], understanding?: any): string {
     if (results.length === 0) {
-      return "I couldn't find specific information about that, sir.";
+      return "I couldn't find specific information about that.";
     }
 
     const topResult = results[0];
@@ -550,9 +551,9 @@ export class LightAIService {
       
       // Add conversational follow-up based on understanding
       if (understanding && understanding.sentiment === 'positive') {
-        answer += ' Is there anything else you would like to know about this, sir?';
+        answer += ' Is there anything else you'd like to know about this?';
       } else if (results.length > 1) {
-        answer += ` I found ${results.length} sources with similar information if you need more detail, sir.`;
+        answer += ` I found ${results.length} sources with similar information if you need more detail.`;
       }
     } else {
       // Conversational format
