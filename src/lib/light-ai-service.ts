@@ -168,32 +168,38 @@ export class LightAIService {
    */
   private async preloadMobileIntents(): Promise<void> {
     const commonIntents: TrainingExample[] = [
-      // Greetings
-      { input: 'hello', intent: 'greeting', response: 'Hey! How can I help?' },
-      { input: 'hi', intent: 'greeting', response: 'Hi there! What can I do for you?' },
-      { input: 'hey light', intent: 'greeting', response: 'Yeah, I'm here!' },
+      // Greetings - Natural and conversational
+      { input: 'hello', intent: 'greeting', response: 'Hello sir, how can I assist you today?' },
+      { input: 'hi', intent: 'greeting', response: 'Hi sir, what would you like me to do?' },
+      { input: 'hey light', intent: 'greeting', response: 'Yes sir, I\'m listening.' },
+      { input: 'good morning', intent: 'greeting', response: 'Good morning sir, how may I help?' },
+      { input: 'good evening', intent: 'greeting', response: 'Good evening sir, what can I do for you?' },
       
-      // Thanks
-      { input: 'thank you', intent: 'thanks', response: 'You're welcome!' },
-      { input: 'thanks', intent: 'thanks', response: 'Happy to help!' },
+      // Thanks - Warm responses
+      { input: 'thank you', intent: 'thanks', response: 'You\'re most welcome, sir.' },
+      { input: 'thanks', intent: 'thanks', response: 'My pleasure, sir.' },
+      { input: 'appreciate it', intent: 'thanks', response: 'Always happy to help, sir.' },
       
-      // Confirmations
-      { input: 'yes', intent: 'confirm', response: 'Got it.' },
-      { input: 'okay', intent: 'confirm', response: 'Understood.' },
-      { input: 'sure', intent: 'confirm', response: 'On it.' },
+      // Confirmations - Confident
+      { input: 'yes', intent: 'confirm', response: 'Understood, sir.' },
+      { input: 'okay', intent: 'confirm', response: 'Right away, sir.' },
+      { input: 'sure', intent: 'confirm', response: 'On it, sir.' },
+      { input: 'go ahead', intent: 'confirm', response: 'Proceeding now, sir.' },
       
-      // Cancellations
-      { input: 'cancel', intent: 'cancel', response: 'Cancelled.' },
-      { input: 'stop', intent: 'cancel', response: 'Stopped.' },
-      { input: 'never mind', intent: 'cancel', response: 'No problem.' },
+      // Cancellations - Understanding
+      { input: 'cancel', intent: 'cancel', response: 'Cancelled, sir.' },
+      { input: 'stop', intent: 'cancel', response: 'Stopping now, sir.' },
+      { input: 'never mind', intent: 'cancel', response: 'No worries, sir.' },
+      { input: 'forget it', intent: 'cancel', response: 'Understood, sir. Moving on.' },
       
-      // Help
-      { input: 'help', intent: 'help', response: 'I can help with tasks, answer questions, control your phone, and more. What do you need?' },
-      { input: 'what can you do', intent: 'help', response: 'I can set reminders, make calls, open apps, search the web, answer questions, and learn from you. Just ask!' },
+      // Help - Comprehensive
+      { input: 'help', intent: 'help', response: 'I can help with tasks, answer questions, control your phone, search the web, and much more, sir. What would you like to know?' },
+      { input: 'what can you do', intent: 'help', response: 'I can set reminders, make calls, open apps, search the web, answer questions, and learn from you, sir. Just tell me what you need.' },
       
-      // Common questions
-      { input: 'are you there', intent: 'presence', response: 'Yeah, I'm always here!' },
-      { input: 'can you hear me', intent: 'presence', response: 'Loud and clear!' },
+      // Common questions - Reassuring
+      { input: 'are you there', intent: 'presence', response: 'Yes sir, always at your service.' },
+      { input: 'can you hear me', intent: 'presence', response: 'I hear you perfectly, sir.' },
+      { input: 'are you listening', intent: 'presence', response: 'Absolutely, sir. I\'m listening.' },
       
       // Reminders
       { input: 'set reminder', intent: 'reminder_create', action: 'set_reminder' },
@@ -351,13 +357,32 @@ export class LightAIService {
       if (recognized && recognized.confidence > 0.6) {
         console.log(`✅ Recognized intent: ${recognized.intent} (${(recognized.confidence * 100).toFixed(0)}% confidence)`);
 
-        return {
-          text: recognized.suggestedResponse || this.generateResponse(recognized.intent, userMessage),
-          intent: recognized.intent,
-          confidence: recognized.confidence,
-          action: recognized.suggestedAction,
-          source: 'learned',
-        };
+        // If it's an action intent (like making a call), don't say "I don't know"
+        // Just return the action to be executed
+        if (recognized.suggestedAction) {
+          console.log(`🎯 Action intent detected: ${recognized.suggestedAction}`);
+          return {
+            text: recognized.suggestedResponse || this.generateResponse(recognized.intent, userMessage),
+            intent: recognized.intent,
+            confidence: recognized.confidence,
+            action: recognized.suggestedAction,
+            source: 'learned',
+          };
+        }
+
+        // For non-action intents with high confidence, use the response
+        if (recognized.confidence > 0.75 && recognized.suggestedResponse) {
+          return {
+            text: recognized.suggestedResponse,
+            intent: recognized.intent,
+            confidence: recognized.confidence,
+            action: recognized.suggestedAction,
+            source: 'learned',
+          };
+        }
+        
+        // For lower confidence or no response, continue to web search
+        console.log(`⚠️ Confidence ${(recognized.confidence * 100).toFixed(0)}% not high enough, trying web search...`);
       }
 
       // Step 4: Check if user has taught us how to handle this
@@ -371,36 +396,50 @@ export class LightAIService {
         };
       }
 
-      // Step 5: Try enhanced web search as last resort
-      console.log('🌐 Using enhanced multi-source web search...');
-      const enhancedResults = await webSearchEngine.enhancedSearch(userMessage);
-
-      if (enhancedResults.mainAnswer && enhancedResults.mainAnswer !== 'No results found') {
-        let answer = enhancedResults.mainAnswer;
-        
-        // Add confidence indicator
-        const confidenceLevel = enhancedResults.synthesizedInfo.confidence;
-        if (confidenceLevel > 0.8) {
-          answer = `I'm pretty confident about this:\n\n` + answer;
-        } else if (confidenceLevel > 0.6) {
-          answer = `Based on what I found:\n\n` + answer;
-        } else {
-          answer = `I found some info, though sources vary:\n\n` + answer;
-        }
-        
-        // Store this knowledge for future use
-        await lightBrain.storeKnowledge({
-          query: userMessage,
-          answer: answer,
-          source: enhancedResults.sources[0]?.link || 'web',
-          confidence: confidenceLevel,
+      // Step 5: ALWAYS try enhanced web search for questions
+      console.log('🌐 Using enhanced multi-source web search as final attempt...');
+      
+      try {
+        const enhancedResults = await webSearchEngine.enhancedSearch(userMessage);
+        console.log('🌐 Web search results:', {
+          hasAnswer: !!enhancedResults.mainAnswer,
+          answer: enhancedResults.mainAnswer?.substring(0, 100),
+          sources: enhancedResults.sources.length,
+          confidence: enhancedResults.synthesizedInfo.confidence,
         });
 
-        return {
-          text: answer,
-          source: 'web',
-          confidence: confidenceLevel,
-        };
+        if (enhancedResults.mainAnswer && enhancedResults.mainAnswer !== 'No results found') {
+          let answer = enhancedResults.mainAnswer;
+          
+          // Add confidence indicator with natural language
+          const confidenceLevel = enhancedResults.synthesizedInfo.confidence;
+          if (confidenceLevel > 0.8) {
+            answer = `I found reliable information, sir:\n\n` + answer;
+          } else if (confidenceLevel > 0.6) {
+            answer = `Based on what I found online, sir:\n\n` + answer;
+          } else if (confidenceLevel > 0.3) {
+            answer = `I found some information, though sources vary, sir:\n\n` + answer;
+          }
+          
+          // Store this knowledge for future use
+          await lightBrain.storeKnowledge({
+            query: userMessage,
+            answer: answer,
+            source: enhancedResults.sources[0]?.link || 'web',
+            confidence: confidenceLevel,
+          });
+
+          return {
+            text: answer,
+            source: 'web',
+            confidence: confidenceLevel,
+          };
+        } else {
+          console.log('⚠️ Web search returned no useful answer');
+        }
+      } catch (searchError) {
+        console.error('❌ Web search failed:', searchError);
+        // Continue to fallback
       }
 
       // Step 6: Intelligent fallback based on sentiment
@@ -441,19 +480,27 @@ export class LightAIService {
 
   /**
    * Generate intelligent fallback based on context
+   * IMPROVED: More helpful, not repetitive, suggests web search
    */
   private generateIntelligentFallback(understanding: any): string {
-    const { sentiment, intent } = understanding;
+    const { sentiment, intent, entities } = understanding;
     
     if (sentiment === 'negative') {
-      return "I sense you might be frustrated. I'm still learning, but I want to help. Could you rephrase that, or would you like to teach me how to handle this?";
+      return "I sense you might be frustrated, sir. I'm still learning. Let me search the web for you, or you can teach me how to handle this by showing me once.";
     }
     
     if (intent === 'question') {
-      return "That's an interesting question. I don't have a good answer yet, but I can search the web for information. Would you like me to do that?";
+      return "That's an interesting question, sir. Let me search the internet for you - just give me a moment to find the best information.";
     }
     
-    return "I'm not sure about that yet. Could you help me understand, or should I search the web for more information?";
+    if (intent === 'command') {
+      // If it looks like a task Light should be able to do, encourage trying again with more details
+      return "I want to help with that, sir. Could you provide a bit more detail, or try rephrasing? For example, if it's about calling someone, say 'call [name]' or 'call [number]'.";
+    }
+    
+    // Default helpful fallback
+    return "I'm not entirely sure about that yet, sir. Would you like me to search the web for information, or would you prefer to teach me how to handle this?";
+  }
   }
 
   /**

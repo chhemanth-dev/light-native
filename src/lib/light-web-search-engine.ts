@@ -92,21 +92,30 @@ export class LightWebSearchEngine {
    * Search DuckDuckGo (free, no API key)
    */
   private async searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+    console.log('[WebSearch] 🦆 Starting DuckDuckGo search for:', query);
+    
     try {
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      console.log('[WebSearch] 🦆 Fetching URL:', url);
+      
       // Use DuckDuckGo Instant Answer API
-      const response = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-      );
+      const response = await fetch(url);
+      console.log('[WebSearch] 🦆 Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         throw new Error(`DuckDuckGo API error: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('[WebSearch] 🦆 Raw response keys:', Object.keys(data));
+      console.log('[WebSearch] 🦆 Abstract:', data.Abstract?.substring(0, 100));
+      console.log('[WebSearch] 🦆 RelatedTopics length:', data.RelatedTopics?.length || 0);
+      
       const results: SearchResult[] = [];
 
       // Extract abstract (main answer)
       if (data.Abstract) {
+        console.log('[WebSearch] 🦆 Found Abstract result');
         results.push({
           title: data.Heading || query,
           snippet: data.Abstract,
@@ -119,6 +128,7 @@ export class LightWebSearchEngine {
 
       // Extract related topics
       if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
+        console.log('[WebSearch] 🦆 Processing', data.RelatedTopics.length, 'related topics');
         for (const topic of data.RelatedTopics.slice(0, 5)) {
           if (topic.Text && topic.FirstURL) {
             results.push({
@@ -151,6 +161,7 @@ export class LightWebSearchEngine {
 
       // Extract infobox
       if (data.Infobox && data.Infobox.content) {
+        console.log('[WebSearch] 🦆 Found Infobox with', data.Infobox.content.length, 'items');
         const infoText = data.Infobox.content
           .map((item: any) => `${item.label}: ${item.value}`)
           .join('. ');
@@ -167,10 +178,15 @@ export class LightWebSearchEngine {
         }
       }
 
-      console.log('[WebSearch] DuckDuckGo returned', results.length, 'results');
+      console.log('[WebSearch] 🦆 DuckDuckGo returned', results.length, 'total results');
+      if (results.length > 0) {
+        console.log('[WebSearch] 🦆 First result:', results[0].snippet.substring(0, 100));
+      }
+      
       return results;
     } catch (error) {
-      console.error('[WebSearch] DuckDuckGo search error:', error);
+      console.error('[WebSearch] 🦆 DuckDuckGo search error:', error);
+      console.error('[WebSearch] 🦆 Error details:', JSON.stringify(error));
       return [];
     }
   }
@@ -325,12 +341,21 @@ export class LightWebSearchEngine {
     results: SearchResult[],
     synthesized: { summary: string; confidence: number }
   ): string {
+    console.log('[WebSearch] 📝 Creating main answer from', results.length, 'results');
+    
     if (results.length === 0) {
-      return "I couldn't find specific information about that, sir. Could you rephrase your question?";
+      console.log('[WebSearch] ⚠️ No results to create answer from');
+      return "I searched online but couldn't find specific information about that, sir. Could you rephrase your question or be more specific?";
     }
 
     const topResult = results[0];
     const lower = query.toLowerCase();
+
+    console.log('[WebSearch] 📝 Top result:', {
+      source: topResult.source,
+      snippet: topResult.snippet.substring(0, 100),
+      relevance: topResult.relevanceScore,
+    });
 
     // Direct answer format for definition questions
     if (lower.startsWith('what is') || lower.startsWith('who is')) {
@@ -342,6 +367,15 @@ export class LightWebSearchEngine {
       } else if (topResult.link) {
         answer += `\n\n🔗 Source: ${topResult.domain}`;
       }
+
+      console.log('[WebSearch] ✅ Created definition answer:', answer.substring(0, 100));
+      return answer;
+    }
+
+    // For other questions, use synthesized summary
+    console.log('[WebSearch] ✅ Using synthesized summary');
+    return synthesized.summary;
+  }
 
       // Add additional context if confidence is high
       if (synthesized.confidence > 0.7 && results.length > 1) {
