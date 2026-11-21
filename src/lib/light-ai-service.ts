@@ -14,6 +14,8 @@ import { lightBrain } from './light-brain';
 import { lightTeacher } from './light-teacher';
 import { storageManager } from './light-storage-manager';
 import { actionExecutor } from './light-action-executor';
+import { reasoningEngine } from './light-reasoning-engine';
+import { selfHealingSystem } from './light-self-healing';
 
 export interface LightAIResponse {
   text: string;
@@ -36,7 +38,18 @@ export class LightAIService {
     if (this.initialized) return;
 
     try {
-      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level)...');
+      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level + Advanced Reasoning + Self-Healing)...');
+
+      // Run proactive health check and auto-fix issues
+      const health = await selfHealingSystem.healthCheck();
+      if (health.status === 'critical') {
+        console.warn('⚠️ Critical health issues detected:', health.issues);
+        console.log('🔧 Auto-fixed:', health.autoFixedIssues);
+      } else if (health.status === 'warning') {
+        console.log('⚠️ Minor health issues:', health.issues);
+      } else {
+        console.log('✅ System health: Excellent');
+      }
 
       // Initialize conversation engine for deep understanding
       await conversationEngine.initialize();
@@ -65,9 +78,22 @@ export class LightAIService {
       console.log('💾 Storage stats:', stats);
 
       this.initialized = true;
-      console.log('✅ Light AI Service ready! (ChatGPT-5 level intelligence)');
+      console.log('✅ Light AI Service ready! (Maximum Intelligence Mode)');
+      console.log('🧠 Advanced Reasoning: ENABLED');
+      console.log('🔧 Self-Healing: ENABLED');
+      console.log('🎯 Autonomous Actions: ENABLED');
     } catch (error) {
       console.error('❌ Failed to initialize Light AI Service:', error);
+      
+      // Try to self-heal initialization error
+      const repair = await selfHealingSystem.autoRepair(error as Error);
+      if (repair.fixed) {
+        console.log('🔧 Self-healed initialization:', repair.message);
+        // Retry initialization
+        this.initialized = false;
+        return this.initialize();
+      }
+      
       throw error;
     }
   }
@@ -256,7 +282,7 @@ export class LightAIService {
     }
 
     try {
-      console.log('💭 Light AI processing (ChatGPT-5 level):', userMessage);
+      console.log('💭 Light AI processing (Maximum Intelligence Mode):', userMessage);
 
       // Step 0: Deep understanding using conversation engine
       const understanding = await conversationEngine.understand(userMessage);
@@ -266,6 +292,26 @@ export class LightAIService {
         sentiment: understanding.sentiment,
         confidence: understanding.confidence,
       });
+
+      // Step 0.5: Advanced multi-step reasoning for complex queries
+      const problem = this.analyzeComplexity(userMessage);
+      if (problem.isComplex) {
+        console.log('🧠 Complex query detected - engaging advanced reasoning...');
+        const reasoning = await reasoningEngine.reason(userMessage);
+        console.log('🧠 Reasoning complete:', {
+          steps: reasoning.steps.length,
+          confidence: reasoning.confidence,
+        });
+        
+        // If reasoning found a clear conclusion, use it
+        if (reasoning.confidence > 0.8) {
+          return {
+            text: reasoning.conclusion,
+            confidence: reasoning.confidence,
+            source: 'reasoning',
+          };
+        }
+      }
 
       // Get contextual information from previous conversations
       const contextInfo = conversationEngine.getContextualInfo();
@@ -452,11 +498,56 @@ export class LightAIService {
 
     } catch (error) {
       console.error('❌ Error processing message:', error);
+      
+      // SELF-HEALING: Try to automatically fix the error
+      const repair = await selfHealingSystem.autoRepair(error as Error);
+      if (repair.fixed) {
+        console.log('🔧 Self-healed error:', repair.action);
+        return {
+          text: repair.message,
+          source: 'self_healing',
+        };
+      }
+      
       return {
-        text: "I ran into an error processing that. Could you try rephrasing?",
+        text: "I ran into an error processing that. Could you try rephrasing, sir?",
         source: 'fallback',
       };
     }
+  }
+
+  /**
+   * Analyze query complexity to determine if advanced reasoning needed
+   */
+  private analyzeComplexity(text: string): { isComplex: boolean; reason: string } {
+    const lower = text.toLowerCase();
+    
+    // Complex patterns that need deep reasoning
+    const complexPatterns = [
+      /how do i|how can i|how should i/i, // Multi-step processes
+      /what if|suppose|imagine/i, // Hypothetical reasoning
+      /compare|difference between|versus/i, // Comparative analysis
+      /why|explain|understand/i, // Deep explanations
+      /plan|strategy|approach/i, // Planning tasks
+      /solve|fix|repair|troubleshoot/i, // Problem-solving
+      /best way|optimal|efficient/i, // Optimization
+    ];
+    
+    if (complexPatterns.some(p => p.test(text))) {
+      return { isComplex: true, reason: 'Matches complex pattern' };
+    }
+    
+    // Long queries (>20 words) likely complex
+    if (text.split(' ').length > 20) {
+      return { isComplex: true, reason: 'Query length > 20 words' };
+    }
+    
+    // Multiple questions in one
+    if ((text.match(/\?/g) || []).length > 1) {
+      return { isComplex: true, reason: 'Multiple questions' };
+    }
+    
+    return { isComplex: false, reason: 'Simple query' };
   }
 
   /**
