@@ -245,6 +245,11 @@ export class LightAssistant {
           }
         }
         
+        // Cap conversation history
+        if (this.history.length > LIGHT_CONFIG.history.maxLength) {
+          this.history = this.history.slice(-LIGHT_CONFIG.history.maxLength);
+        }
+        
         // If Light AI suggests teaching mode
         if (lightResponse.requiresTeaching) {
           console.log("[Assistant] 📚 Light AI suggests learning from user");
@@ -260,21 +265,6 @@ export class LightAssistant {
         );
         return;
       }
-
-      // NOTE: We removed the fallback to external APIs
-      // Light AI handles everything now!
-      console.log("[Assistant] Offline mode:", offline);
-      console.log("[Assistant] Response:", text.substring(0, 100));
-      
-      this.history.push({ role: "assistant", content: text });
-
-      if (this.history.length > 20) {
-        this.history = this.history.slice(-20);
-      }
-
-      // Execute any actions mentioned in AI response (REMOVED - Light AI handles actions)
-
-      await this.respond(text, offline);
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Something went wrong.";
       console.error("[Assistant] ❌ ERROR:", msg);
