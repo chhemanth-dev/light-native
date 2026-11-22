@@ -101,7 +101,7 @@ class LightAccessibilityService : AccessibilityService() {
         val rect = Rect()
         target.getBoundsInScreen(rect)
         target.recycle()
-        return tapAt(rect.exactCenterX(), rect.exactCenterY())
+        return tapAt(rect.centerX().toFloat(), rect.centerY().toFloat())
     }
 
     private fun findNodeContaining(node: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {

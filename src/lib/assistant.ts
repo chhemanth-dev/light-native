@@ -383,21 +383,40 @@ export class LightAssistant {
     }
 
     console.log("[Assistant] Calling speak()...");
-    // speak() now has its own error handling that fires onDone on failure
-    await new Promise<void>((resolve) => {
+    
+    // Add timeout to prevent hanging in speaking state forever
+    const speakPromise = new Promise<void>((resolve) => {
+      let resolved = false;
+      const resolveOnce = () => {
+        if (!resolved) {
+          resolved = true;
+          console.log("[Assistant] speak() completed");
+          this.setState("idle");
+          resolve();
+        }
+      };
+      
       speak(text, {
         onDone: () => {
           console.log("[Assistant] speak() onDone called");
-          this.setState("idle");
-          resolve();
+          resolveOnce();
         },
         onStopped: () => {
           console.log("[Assistant] speak() onStopped called");
-          this.setState("idle");
-          resolve();
+          resolveOnce();
         },
       });
+      
+      // Safety timeout: Reset state after 30 seconds max
+      setTimeout(() => {
+        if (!resolved) {
+          console.warn("[Assistant] ⚠️ Speech timeout - forcing idle state");
+          resolveOnce();
+        }
+      }, 30000);
     });
+    
+    await speakPromise;
   }
 
   /**

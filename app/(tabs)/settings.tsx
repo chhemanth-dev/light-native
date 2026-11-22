@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView,
-  Alert, ScrollView,
+  Alert, ScrollView, TextInput, Modal,
 } from "react-native";
 import { router } from "expo-router";
 import { getOwnerName, hasBiometrics } from "../../src/lib/vault";
@@ -24,6 +24,8 @@ export default function SettingsScreen() {
   const [nlEnabled, setNlEnabled] = useState(false);
   const [geminiAvailable, setGeminiAvailable] = useState(false);
   const [aiConfidence, setAiConfidence] = useState(LIGHT_CONFIG.ai.confidenceThreshold);
+  const [showConfidenceModal, setShowConfidenceModal] = useState(false);
+  const [confidenceInput, setConfidenceInput] = useState('70');
   const { setLocked } = useAppStore();
 
   useEffect(() => {
@@ -99,30 +101,22 @@ export default function SettingsScreen() {
   }
 
   function handleChangeConfidence() {
-    Alert.prompt(
-      "AI Confidence Threshold",
-      `Current: ${(aiConfidence * 100).toFixed(0)}%\n\nLight will only execute actions when confidence is above this threshold. Lower = more actions, Higher = fewer but more accurate.\n\nEnter new threshold (0-100):`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save",
-          onPress: async (input) => {
-            const value = parseInt(input || "70");
-            if (isNaN(value) || value < 0 || value > 100) {
-              Alert.alert("Invalid", "Please enter a number between 0 and 100");
-              return;
-            }
-            const confidence = value / 100;
-            setAiConfidence(confidence);
-            // Save using helper
-            await saveAIConfidence(confidence);
-            speak(`Confidence threshold set to ${value} percent, sir.`);
-          },
-        },
-      ],
-      "plain-text",
-      (aiConfidence * 100).toFixed(0)
-    );
+    setConfidenceInput((aiConfidence * 100).toFixed(0));
+    setShowConfidenceModal(true);
+  }
+
+  async function saveConfidence() {
+    const value = parseInt(confidenceInput);
+    if (isNaN(value) || value < 0 || value > 100) {
+      Alert.alert("Invalid", "Please enter a number between 0 and 100");
+      return;
+    }
+    
+    const confidence = value / 100;
+    setAiConfidence(confidence);
+    await saveAIConfidence(confidence);
+    setShowConfidenceModal(false);
+    speak(`Confidence threshold set to ${value} percent, sir.`);
   }
 
   const Section = ({ title }: { title: string }) => (
@@ -166,6 +160,49 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Settings</Text>
+
+        {/* AI Confidence Modal */}
+        <Modal
+          visible={showConfidenceModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowConfidenceModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>AI Confidence Threshold</Text>
+              <Text style={styles.modalDesc}>
+                Current: {(aiConfidence * 100).toFixed(0)}%{'\n\n'}
+                Light will only execute actions when confidence is above this threshold.{'\n\n'}
+                Lower = more actions{'\n'}
+                Higher = fewer but more accurate{'\n\n'}
+                Enter new threshold (0-100):
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                value={confidenceInput}
+                onChangeText={setConfidenceInput}
+                keyboardType="number-pad"
+                autoFocus
+                selectTextOnFocus
+              />
+              <View style={styles.modalButtons}>
+                <Pressable 
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowConfidenceModal(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </Pressable>
+                <Pressable 
+                  style={[styles.modalButton, styles.modalButtonSave]}
+                  onPress={saveConfidence}
+                >
+                  <Text style={styles.modalButtonText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <Section title="ACCOUNT" />
         <View style={styles.group}>
@@ -326,4 +363,62 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   lockBtnText: { color: "#64748B", fontSize: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#0A0F1E",
+    borderRadius: 16,
+    padding: 24,
+    width: "85%",
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  modalTitle: {
+    color: "#E2E8F0",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  modalDesc: {
+    color: "#94A3B8",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: "#1E293B",
+    borderRadius: 8,
+    padding: 12,
+    color: "#E2E8F0",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#1E293B",
+  },
+  modalButtonSave: {
+    backgroundColor: "#6A4CFF",
+  },
+  modalButtonText: {
+    color: "#E2E8F0",
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });
