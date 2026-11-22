@@ -14,12 +14,16 @@ import { isNotificationListenerEnabled, openNotificationListenerSettings } from 
 import { isGeminiNanoAvailable } from "../../src/lib/gemini";
 import { useAppStore } from "../../src/store/appStore";
 import { speak } from "../../src/lib/voice";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LIGHT_CONFIG } from "../../src/lib/light-config";
+import { saveAIConfidence } from "../../src/lib/config-loader";
 
 export default function SettingsScreen() {
   const [ownerName, setOwnerNameState] = useState("");
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [nlEnabled, setNlEnabled] = useState(false);
   const [geminiAvailable, setGeminiAvailable] = useState(false);
+  const [aiConfidence, setAiConfidence] = useState(LIGHT_CONFIG.ai.confidenceThreshold);
   const { setLocked } = useAppStore();
 
   useEffect(() => {
@@ -27,6 +31,16 @@ export default function SettingsScreen() {
     hasBiometrics().then(setBiometricsAvailable);
     isNotificationListenerEnabled().then(setNlEnabled);
     isGeminiNanoAvailable().then(setGeminiAvailable);
+    
+    // Load saved AI confidence
+    AsyncStorage.getItem('ai_confidence_threshold').then((value) => {
+      if (value) {
+        const confidence = parseFloat(value);
+        setAiConfidence(confidence);
+        // Update config in memory
+        (LIGHT_CONFIG.ai as any).confidenceThreshold = confidence;
+      }
+    });
   }, []);
 
   function handleLock() {
@@ -82,6 +96,33 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  }
+
+  function handleChangeConfidence() {
+    Alert.prompt(
+      "AI Confidence Threshold",
+      `Current: ${(aiConfidence * 100).toFixed(0)}%\n\nLight will only execute actions when confidence is above this threshold. Lower = more actions, Higher = fewer but more accurate.\n\nEnter new threshold (0-100):`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save",
+          onPress: async (input) => {
+            const value = parseInt(input || "70");
+            if (isNaN(value) || value < 0 || value > 100) {
+              Alert.alert("Invalid", "Please enter a number between 0 and 100");
+              return;
+            }
+            const confidence = value / 100;
+            setAiConfidence(confidence);
+            // Save using helper
+            await saveAIConfidence(confidence);
+            speak(`Confidence threshold set to ${value} percent, sir.`);
+          },
+        },
+      ],
+      "plain-text",
+      (aiConfidence * 100).toFixed(0)
+    );
   }
 
   const Section = ({ title }: { title: string }) => (
@@ -160,6 +201,11 @@ export default function SettingsScreen() {
 
         <Section title="AI ENGINE" />
         <View style={styles.group}>
+          <Row
+            label="AI Confidence Threshold"
+            value={`${(aiConfidence * 100).toFixed(0)}%`}
+            onPress={handleChangeConfidence}
+          />
           <Row
             label="AI Provider & API Keys"
             onPress={() => router.push('/ai-settings')}

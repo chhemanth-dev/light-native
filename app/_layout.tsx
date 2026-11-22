@@ -12,6 +12,7 @@ import { useAppStore } from "../src/store/appStore";
 import { router } from "expo-router";
 import { initializeNotifications } from "../src/lib/notificationSetup";
 import { initializeTraining } from "../src/lib/initialize-training";
+import { loadUserPreferences } from "../src/lib/config-loader";
 
 // Optional: Load API keys if local file exists (git-ignored for security)
 let initializeMyAPIKeys: (() => Promise<void>) | null = null;
@@ -56,6 +57,10 @@ export default function RootLayout() {
           console.warn("[RootLayout] ⚠️ Light AI training initialization failed:", err);
           // Don't block app startup if training fails
         });
+        
+        // Load user preferences (AI confidence, etc.)
+        console.log("[RootLayout] 📋 Loading user preferences...");
+        await loadUserPreferences();
         
         // Initialize notifications (channels, permissions, handler)
         await initializeNotifications();
