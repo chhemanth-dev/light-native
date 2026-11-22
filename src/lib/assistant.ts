@@ -25,6 +25,7 @@ import { ask, type AIMessage } from "./gemini";
 import { lightAI } from "./light-ai-service";
 import { actionExecutor } from "./light-action-executor";
 import { guidedExecutor } from "./light-guided-executor";
+import * as SmartActions from "./smart-action-executor";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
 import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } from "./reminders";
@@ -287,42 +288,77 @@ export class LightAssistant {
     const sub = parseSubtask(part, this.conversationCtx);
     if (!sub) return null;
 
+    // PLAY/SEARCH: Use SmartActions to actually do it
     if ((sub.kind === "play" || sub.kind === "search") && sub.app && sub.query) {
-      const url = buildSearchUrl(sub.app, sub.query);
-      if (!url) return null;
       try {
-        await Linking.openURL(url);
+        let result;
+        
+        if (sub.app === 'youtube') {
+          result = await SmartActions.playYouTubeVideo(sub.query);
+        } else if (sub.app === 'spotify') {
+          result = await SmartActions.playSpotifySong(sub.query);
+        } else {
+          // Fallback to URL opening
+          const url = buildSearchUrl(sub.app, sub.query);
+          if (!url) return null;
+          result = await SmartActions.openURL(url);
+        }
+        
+        if (result.success) {
+          this.conversationCtx.lastApp = sub.app;
+          this.conversationCtx.lastQuery = sub.query;
+          this.conversationCtx.lastAction = sub.kind;
+          this.conversationCtx.timestamp = Date.now();
+          return `${result.message}, sir. The search results should be opening now.`;
+        } else {
+          return `${result.message}, sir.`;
+        }
       } catch (error) {
-        console.error("[Assistant] ❌ Error opening search URL:", error);
+        console.error("[Assistant] ❌ Error executing play/search:", error);
         return `I couldn't open ${sub.app} for that, sir.`;
       }
-      this.conversationCtx.lastApp = sub.app;
-      this.conversationCtx.lastQuery = sub.query;
-      this.conversationCtx.lastAction = sub.kind;
-      this.conversationCtx.timestamp = Date.now();
-      // Opens search results only; playback is not started.
-      return `Opened ${sub.app} search results for "${sub.query}", sir. I haven't started playback, so pick the one you want.`;
     }
 
-    // Passwords are never read, stored or logged by this assistant; login is only opened in the browser/app for the user to complete themselves.
+    // LOGIN: Open sign-in page (never handle credentials)
     if (sub.kind === "login" && sub.app) {
       const loginUrl = (LIGHT_CONFIG.login as Record<string, string>)[sub.app];
       if (!loginUrl) {
         return `I can open ${sub.app}, sir, but I won't handle your credentials. Please sign in there yourself.`;
       }
       try {
-        await Linking.openURL(loginUrl);
+        const result = await SmartActions.openURL(loginUrl);
+        if (result.success) {
+          this.conversationCtx.lastApp = sub.app;
+          this.conversationCtx.lastAction = "login";
+          this.conversationCtx.timestamp = Date.now();
+          return `Opened the ${sub.app} sign-in page, sir. Please complete the login yourself.`;
+        } else {
+          return `I couldn't open the ${sub.app} sign-in page, sir.`;
+        }
       } catch (error) {
         console.error("[Assistant] ❌ Error opening login URL:", error);
         return `I couldn't open the ${sub.app} sign-in page, sir.`;
       }
-      this.conversationCtx.lastApp = sub.app;
-      this.conversationCtx.lastAction = "login";
-      this.conversationCtx.timestamp = Date.now();
-      return `Opened the ${sub.app} sign-in page, sir. Please complete the login yourself.`;
     }
 
-    // "open <app>" is left to the existing app-open path in handleLocalIntent.
+    // OPEN APP: Use SmartActions
+    if (sub.kind === "open" && sub.app) {
+      try {
+        const result = await SmartActions.openApp(sub.app);
+        if (result.success) {
+          this.conversationCtx.lastApp = sub.app;
+          this.conversationCtx.lastAction = "open";
+          this.conversationCtx.timestamp = Date.now();
+          return `${result.message}, sir.`;
+        } else {
+          return `${result.message}, sir.`;
+        }
+      } catch (error) {
+        console.error("[Assistant] ❌ Error opening app:", error);
+        return `I couldn't open ${sub.app}, sir.`;
+      }
+    }
+
     return null;
   }
 
