@@ -374,17 +374,7 @@ export class LightWebSearchEngine {
 
     // For other questions, use synthesized summary
     console.log('[WebSearch] ✅ Using synthesized summary');
-    return synthesized.summary;
-  }
-
-      // Add additional context if confidence is high
-      if (synthesized.confidence > 0.7 && results.length > 1) {
-        answer += `\n\nI found ${results.length} sources confirming this information.`;
-      }
-
-      return answer;
-    }
-
+    
     // Conversational format for other questions
     let answer = `Based on what I found from ${results.length} source${results.length > 1 ? 's' : ''}:\n\n`;
     answer += synthesized.summary;
