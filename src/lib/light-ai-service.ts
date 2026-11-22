@@ -403,7 +403,7 @@ export class LightAIService {
       if (recognized && recognized.confidence > 0.6) {
         console.log(`✅ Recognized intent: ${recognized.intent} (${(recognized.confidence * 100).toFixed(0)}% confidence)`);
 
-        // If it's an action intent (like making a call), don't say "I don't know"
+        // If it is an action intent (like making a call), do not say "I do not know"
         // Just return the action to be executed
         if (recognized.suggestedAction) {
           console.log(`🎯 Action intent detected: ${recognized.suggestedAction}`);
@@ -558,12 +558,12 @@ export class LightAIService {
     
     if (intent === 'command') {
       if (!entities.apps && !entities.names) {
-        return "I'd be happy to help. Could you specify what you'd like me to do?";
+        return "I would be happy to help. Could you specify what you would like me to do?";
       }
     }
     
     if (intent === 'question') {
-      return "I want to help with that. Could you provide more details about what you're asking?";
+      return "I want to help with that. Could you provide more details about what you are asking?";
     }
     
     return "Could you clarify that for me? I want to make sure I understand correctly.";
@@ -577,20 +577,20 @@ export class LightAIService {
     const { sentiment, intent, entities } = understanding;
     
     if (sentiment === 'negative') {
-      return "I sense you might be frustrated, sir. I'm still learning. Let me search the web for you, or you can teach me how to handle this by showing me once.";
+      return "I sense you might be frustrated, sir. I am still learning. Let me search the web for you, or you can teach me how to handle this by showing me once.";
     }
     
     if (intent === 'question') {
-      return "That's an interesting question, sir. Let me search the internet for you - just give me a moment to find the best information.";
+      return "That is an interesting question, sir. Let me search the internet for you - just give me a moment to find the best information.";
     }
     
     if (intent === 'command') {
       // If it looks like a task Light should be able to do, encourage trying again with more details
-      return "I want to help with that, sir. Could you provide a bit more detail, or try rephrasing? For example, if it's about calling someone, say 'call [name]' or 'call [number]'.";
+      return "I want to help with that, sir. Could you provide a bit more detail, or try rephrasing? For example, if it is about calling someone, say 'call [name]' or 'call [number]'.";
     }
     
     // Default helpful fallback
-    return "I'm not entirely sure about that yet, sir. Would you like me to search the web for information, or would you prefer to teach me how to handle this?";
+    return "I am not entirely sure about that yet, sir. Would you like me to search the web for information, or would you prefer to teach me how to handle this?";
   }
 
   /**
@@ -680,7 +680,7 @@ export class LightAIService {
     // Create concise, natural response based on sentiment and context
     let answer = '';
     
-    // Check if it's a direct question
+    // Check if it is a direct question
     const lower = question.toLowerCase();
     if (lower.startsWith('what is') || lower.startsWith('who is')) {
       // Direct answer format
@@ -688,7 +688,7 @@ export class LightAIService {
       
       // Add conversational follow-up based on understanding
       if (understanding && understanding.sentiment === 'positive') {
-        answer += ' Is there anything else you'd like to know about this?';
+        answer += ' Is there anything else you would like to know about this?';
       } else if (results.length > 1) {
         answer += ` I found ${results.length} sources with similar information if you need more detail.`;
       }
@@ -787,7 +787,7 @@ export class LightAIService {
     try {
       console.log('📚 Loading training data from:', trainingDataPath);
       
-      // In React Native, you'd import the JSON file
+      // In React Native, you would import the JSON file
       // For now, this is a placeholder
       // const trainingData = require(trainingDataPath);
       // await patternLearner.learnFromExamples(trainingData);
