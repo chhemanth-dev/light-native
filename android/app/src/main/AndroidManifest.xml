@@ -53,6 +53,22 @@
         <action android:name="android.service.notification.NotificationListenerService"/>
       </intent-filter>
     </service>
+
+    <!-- Accessibility Service: lets Light read the screen and tap on request -->
+    <service
+        android:name=".LightAccessibilityService"
+        android:label="Light Screen Control"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        android:exported="false">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService"/>
+      </intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/light_accessibility_config"/>
+    </service>
+
+    <!-- Floating orb overlay: keeps the assistant visible while Light is in use -->
+    <service android:name=".FloatingOrbService" android:exported="false" android:foregroundServiceType="microphone" />
+
     
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>

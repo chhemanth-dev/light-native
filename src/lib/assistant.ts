@@ -18,6 +18,9 @@
  * 3. Light AI chat - pattern recognition + web search
  * 4. No external API calls by default!
  */
+import { Linking } from "react-native";
+import { LIGHT_CONFIG } from "./light-config";
+import { parseSubtask, buildSearchUrl, splitMultiStep } from "./light-subtasks";
 import { ask, type AIMessage } from "./gemini";
 import { lightAI } from "./light-ai-service";
 import { actionExecutor } from "./light-action-executor";
@@ -58,6 +61,8 @@ export class LightAssistant {
   private conversationContext: string[] = []; // Remember conversation context
   private currentApp: string | null = null; // NEW: Remember what app is open
   private lastAction: string | null = null; // NEW: Remember last action
+  // Conversation context for subtasks ("open youtube" then "search cats"). Expires via LIGHT_CONFIG.context.timeoutMs.
+  private conversationCtx: { lastApp?: string; lastAction?: string; lastQuery?: string; timestamp?: number } = {};
 
   constructor() {
     // Initialize Light AI in background
@@ -139,6 +144,31 @@ export class LightAssistant {
         });
       }
 
+      // ========================================
+      // SUBTASKS - multi-step ("open youtube and then search cats") and single-part
+      // (play / search / login on a known app). Runs before local intents.
+      // ========================================
+      const parts = splitMultiStep(userText);
+      if (parts.length > 1 && parts.some((p) => parseSubtask(p, this.conversationCtx) !== null)) {
+        console.log("[Assistant] 🧩 Multi-step request:", parts.length, "steps");
+        const lines: string[] = [];
+        for (let i = 0; i < parts.length; i++) {
+          const reply =
+            (await this.routeSubtask(parts[i])) ??
+            (await this.handleLocalIntent(parts[i])) ??
+            "I couldn't do that step, sir.";
+          lines.push(`${i + 1}. ${reply}`);
+        }
+        await this.respond(lines.join("\n"), true);
+        return;
+      }
+
+      const subtaskReply = await this.routeSubtask(userText);
+      if (subtaskReply) {
+        await this.respond(subtaskReply, true);
+        return;
+      }
+
       // Add app context to the command if we're in an app
       let contextualInput = userText;
       if (this.currentApp) {
@@ -198,7 +228,7 @@ export class LightAssistant {
           console.log("[Assistant] 🎯 Light AI identified action:", lightResponse.intent || lightResponse.action);
           
           // Only execute if confidence is high enough
-          if ((lightResponse.confidence || 0) > 0.7) {
+          if ((lightResponse.confidence || 0) > LIGHT_CONFIG.ai.confidenceThreshold) {
             console.log("[Assistant] ✅ High confidence - executing action");
             const executed = await lightAI.executeAction(
               lightResponse.intent || 'unknown',
@@ -257,6 +287,53 @@ export class LightAssistant {
       this.emit({ type: "error", message: "I had trouble with that. Could you try rephrasing?" });
       setTimeout(() => this.setState("idle"), 3000);
     }
+  }
+
+  /**
+   * Routes one phrase through the subtask helpers.
+   * Returns a reply when handled, or null so the caller falls through to the existing code.
+   */
+  private async routeSubtask(part: string): Promise<string | null> {
+    const sub = parseSubtask(part, this.conversationCtx);
+    if (!sub) return null;
+
+    if ((sub.kind === "play" || sub.kind === "search") && sub.app && sub.query) {
+      const url = buildSearchUrl(sub.app, sub.query);
+      if (!url) return null;
+      try {
+        await Linking.openURL(url);
+      } catch (error) {
+        console.error("[Assistant] ❌ Error opening search URL:", error);
+        return `I couldn't open ${sub.app} for that, sir.`;
+      }
+      this.conversationCtx.lastApp = sub.app;
+      this.conversationCtx.lastQuery = sub.query;
+      this.conversationCtx.lastAction = sub.kind;
+      this.conversationCtx.timestamp = Date.now();
+      // Opens search results only; playback is not started.
+      return `Opened ${sub.app} search results for "${sub.query}", sir. I haven't started playback, so pick the one you want.`;
+    }
+
+    // Passwords are never read, stored or logged by this assistant; login is only opened in the browser/app for the user to complete themselves.
+    if (sub.kind === "login" && sub.app) {
+      const loginUrl = (LIGHT_CONFIG.login as Record<string, string>)[sub.app];
+      if (!loginUrl) {
+        return `I can open ${sub.app}, sir, but I won't handle your credentials. Please sign in there yourself.`;
+      }
+      try {
+        await Linking.openURL(loginUrl);
+      } catch (error) {
+        console.error("[Assistant] ❌ Error opening login URL:", error);
+        return `I couldn't open the ${sub.app} sign-in page, sir.`;
+      }
+      this.conversationCtx.lastApp = sub.app;
+      this.conversationCtx.lastAction = "login";
+      this.conversationCtx.timestamp = Date.now();
+      return `Opened the ${sub.app} sign-in page, sir. Please complete the login yourself.`;
+    }
+
+    // "open <app>" is left to the existing app-open path in handleLocalIntent.
+    return null;
   }
 
   private async respond(text: string, offline: boolean) {
@@ -559,6 +636,13 @@ export class LightAssistant {
           
           console.log("[Assistant] Opening app:", packageName);
           await openApp(packageName);
+          // Record the opened media app so follow-up subtasks ("search cats") can use it.
+          const openedKey = Object.entries(LIGHT_CONFIG.apps.packages).find(([, pkg]) => pkg === packageName)?.[0];
+          if (openedKey) {
+            this.conversationCtx.lastApp = openedKey;
+            this.conversationCtx.lastAction = "open";
+            this.conversationCtx.timestamp = Date.now();
+          }
           return `Opening ${appCmd.appName}, sir.`;
         } catch (error) {
           console.error("[Assistant] ❌ Error opening app:", error);

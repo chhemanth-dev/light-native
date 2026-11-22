@@ -9,11 +9,22 @@ import { scheduleReminder, parseReminderFromSpeech } from './reminders';
 import { lightBrain } from './light-brain';
 import { speak } from './voice';
 import { Linking, PermissionsAndroid, Platform } from 'react-native';
+import { LIGHT_CONFIG } from './light-config';
+import {
+  tapText,
+  tapAt,
+  scroll,
+  typeText,
+  globalAction,
+  getScreenText,
+  openPlayStore,
+} from './light-screen';
 
 export interface ExecutionResult {
   success: boolean;
   message: string;
   error?: string;
+  status?: 'needs_confirmation';
 }
 
 export class LightActionExecutor {
@@ -89,6 +100,30 @@ export class LightActionExecutor {
         case 'calculate':
         case 'math':
           return await this.executeCalculation(userInput);
+
+        case 'screen_tap_text':
+          return await this.runScreenAction(intent, params.text || '', () => tapText(params.text), (ok) => ok ? `Tapped "${params.text}"` : `Could not find "${params.text}" on screen`);
+
+        case 'screen_tap_xy':
+          return await this.runScreenAction(intent, '', () => tapAt(Number(params.x), Number(params.y)), (ok) => ok ? `Tapped at ${params.x}, ${params.y}` : 'Tap failed');
+
+        case 'screen_scroll':
+          return await this.runScreenAction(intent, '', () => scroll(params.direction), (ok) => ok ? `Scrolled ${params.direction}` : 'Scroll failed');
+
+        case 'screen_type':
+          return await this.runScreenAction(intent, params.text || '', () => typeText(params.text), (ok) => ok ? 'Typed text' : 'Typing failed');
+
+        case 'screen_back':
+          return await this.runScreenAction(intent, '', () => globalAction('back'), (ok) => ok ? 'Went back' : 'Back action failed');
+
+        case 'screen_home':
+          return await this.runScreenAction(intent, '', () => globalAction('home'), (ok) => ok ? 'Went home' : 'Home action failed');
+
+        case 'screen_read':
+          return await this.runScreenAction(intent, '', () => getScreenText(), (lines) => lines.length > 0 ? lines.join(' | ') : 'No text found on screen');
+
+        case 'app_install':
+          return await this.runScreenAction(intent, params.packageName || '', () => openPlayStore(params.packageName), () => `Opened Play Store page for ${params.packageName}. Please tap Install yourself.`);
 
         default:
           // Try to find instructions from Light Brain
@@ -620,6 +655,44 @@ export class LightActionExecutor {
         message: 'Failed to calculate',
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  /**
+   * Run a screen-control or app_install action with the confirmation check and timeout.
+   * NOTE: screenMaxSteps is not enforced here - this executor has no step/loop counter,
+   * so the per-task limit must be enforced by the caller.
+   */
+  private async runScreenAction(
+    intent: string,
+    target: string,
+    action: () => Promise<any>,
+    describe: (value: any) => string
+  ): Promise<ExecutionResult> {
+    const lower = target.toLowerCase();
+    const keyword = LIGHT_CONFIG.screenConfirmKeywords.find((k) => lower.includes(k));
+    if (keyword) {
+      return {
+        success: false,
+        status: 'needs_confirmation',
+        message: `"${keyword}" needs your confirmation before I run ${intent}.`,
+      };
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`${intent} timed out`)),
+        LIGHT_CONFIG.screenActionTimeoutMs
+      );
+    });
+
+    try {
+      const value = await Promise.race([action(), timeout]);
+      const ok = value !== false;
+      return { success: ok, message: describe(value) };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

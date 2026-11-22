@@ -6,8 +6,12 @@
 
 import { NativeModules, NativeEventEmitter, PermissionsAndroid, Platform, DeviceEventEmitter } from 'react-native';
 import { assistant } from './assistant';
+import { beginScreenSession, endScreenSession } from './light-screen';
 
 const { FloatingAssistantModule } = NativeModules;
+const SpeechModule = Platform.OS === 'android' ? NativeModules.SpeechModule : null;
+let _speechEmitter: NativeEventEmitter | null = null;
+
 
 class FloatingAssistantManager {
   private active = false;
@@ -38,6 +42,8 @@ class FloatingAssistantManager {
       // Listen for tap events
       this.listener = DeviceEventEmitter.addListener('FLOATING_ORB_TAPPED', async () => {
         console.log('[FloatingAssistant] 🎤 Floating orb tapped!');
+        // Screen reading only happens during the session opened by the orb tap; stopping the overlay ends it.
+        await beginScreenSession().catch(() => false);
         await this.onOrbTapped();
       });
 
@@ -54,6 +60,13 @@ class FloatingAssistantManager {
   async stop(): Promise<void> {
     if (!this.active) return;
 
+    // Screen reading only happens during the session opened by the orb tap; stopping the overlay ends it.
+    try {
+      await endScreenSession();
+    } catch (error) {
+      console.error('[FloatingAssistant] Failed to end screen session:', error);
+    }
+
     try {
       await FloatingAssistantModule.stopFloating();
       this.active = false;
@@ -61,6 +74,7 @@ class FloatingAssistantManager {
       if (this.listener) {
         this.listener.remove();
         this.listener = null;
+        await endScreenSession().catch(() => false);
       }
       
       console.log('[FloatingAssistant] ✅ Stopped floating overlay');
@@ -108,52 +122,72 @@ class FloatingAssistantManager {
       
       console.log('[FloatingAssistant] 🎤 Orb tapped - starting voice recognition');
       
-      // Import speech recognition
-      const { startListening, stopListening } = await import('./speech');
-      
-      // Start listening for voice input
+      if (!SpeechModule) throw new Error('SpeechModule unavailable');
+      const emitter = _speechEmitter ?? new NativeEventEmitter(SpeechModule);
+      _speechEmitter = emitter;
+
+      // Start listening for voice input (same SpeechModule events as useAssistant.ts)
       const transcript = await new Promise<string>((resolve, reject) => {
-        let timeout: NodeJS.Timeout;
-        
-        const cleanup = startListening({
-          onResult: (text) => {
-            console.log('[FloatingAssistant] Got transcript:', text);
-            clearTimeout(timeout);
-            stopListening();
-            resolve(text);
-          },
-          onError: (error) => {
-            console.error('[FloatingAssistant] Speech error:', error);
-            clearTimeout(timeout);
-            reject(error);
-          },
-          onTimeout: () => {
-            console.log('[FloatingAssistant] Speech timeout');
-            clearTimeout(timeout);
-            reject(new Error('Timeout'));
-          }
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let resultSub: { remove: () => void } | null = null;
+        let errorSub: { remove: () => void } | null = null;
+
+        // Remove listeners and timer exactly once on resolve/reject paths
+        const finish = () => {
+          if (timeout) clearTimeout(timeout);
+          resultSub?.remove();
+          errorSub?.remove();
+        };
+
+        resultSub = emitter.addListener('onSpeechResult', (data: { transcript: string }) => {
+          console.log('[FloatingAssistant] Got transcript:', data.transcript);
+          finish();
+          resolve(data.transcript ?? '');
         });
-        
+
+        errorSub = emitter.addListener('onSpeechError', (data: { error: string }) => {
+          console.error('[FloatingAssistant] Speech error:', data.error);
+          finish();
+          reject(new Error(data.error));
+        });
+
         // 10 second timeout
         timeout = setTimeout(() => {
-          cleanup();
+          console.log('[FloatingAssistant] Speech timeout');
+          finish();
+          try { SpeechModule?.stopListening?.(); } catch { /* ignore */ }
           reject(new Error('Timeout'));
         }, 10000);
+
+        SpeechModule.startListening('en-US').catch((error: unknown) => {
+          finish();
+          reject(error);
+        });
       });
       
       if (transcript && transcript.trim()) {
         console.log('[FloatingAssistant] Processing command:', transcript);
         await this.updateStatus('Processing...');
-        
-        // Execute the command through the assistant
-        await assistant.handleInput(transcript);
-        
-        await this.updateStatus('Done!');
+
+        // handleInput() returns nothing; the reply arrives as a 'response' event on assistant.on()
+        const replies: string[] = [];
+        const unsubReply = assistant.on((event) => {
+          if (event.type === 'response') replies.push(event.text);
+        });
+        try {
+          await assistant.handleInput(transcript);
+        } finally {
+          unsubReply();
+        }
+
+        const reply = replies[replies.length - 1];
+        await this.updateStatus(reply ? reply.slice(0, 120) : 'Done!');
         setTimeout(() => this.updateStatus('Tap to speak'), 2000);
       } else {
         await this.updateStatus('No speech detected');
         setTimeout(() => this.updateStatus('Tap to speak'), 2000);
       }
+
       
     } catch (error) {
       console.error('[FloatingAssistant] Error handling tap:', error);
