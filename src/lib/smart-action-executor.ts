@@ -4,6 +4,7 @@
  */
 import { NativeModules, Platform } from 'react-native';
 import { LIGHT_CONFIG } from './light-config';
+import * as Contacts from './contacts-bridge';
 
 const AccessibilityModule = Platform.OS === 'android' ? NativeModules.AccessibilityModule : null;
 
@@ -163,20 +164,43 @@ export async function playSpotifySong(query: string): Promise<ActionResult> {
 }
 
 /**
- * Make a phone call
+ * Make a phone call (supports contact names and numbers)
  */
-export async function makePhoneCall(phoneNumber: string): Promise<ActionResult> {
+export async function makePhoneCall(phoneNumberOrName: string): Promise<ActionResult> {
   if (!AccessibilityModule) {
     return { success: false, message: 'Accessibility module not available' };
   }
 
   try {
+    let phoneNumber = phoneNumberOrName;
+    let contactName = '';
+    
+    // Check if it's a name (not a number)
+    if (!/^\+?[\d\s()-]+$/.test(phoneNumberOrName)) {
+      // It's a name - look up in contacts
+      console.log('[SmartAction] Looking up contact:', phoneNumberOrName);
+      
+      const contact = await Contacts.smartContactLookup(phoneNumberOrName);
+      if (!contact) {
+        return {
+          success: false,
+          message: `I couldn't find "${phoneNumberOrName}" in your contacts`,
+          error: 'CONTACT_NOT_FOUND',
+        };
+      }
+      
+      phoneNumber = contact.phoneNumber;
+      contactName = contact.name;
+      console.log('[SmartAction] Found contact:', contactName, phoneNumber);
+    }
+    
     console.log('[SmartAction] Calling:', phoneNumber);
     await AccessibilityModule.makePhoneCall(phoneNumber);
     
+    const displayName = contactName || phoneNumber;
     return {
       success: true,
-      message: `Calling ${phoneNumber}`,
+      message: `Calling ${displayName}`,
     };
   } catch (error: any) {
     console.error('[SmartAction] Call failed:', error);
@@ -191,7 +215,7 @@ export async function makePhoneCall(phoneNumber: string): Promise<ActionResult> 
     
     return {
       success: false,
-      message: `Failed to call ${phoneNumber}`,
+      message: `Failed to call ${phoneNumberOrName}`,
       error: error.message,
     };
   }

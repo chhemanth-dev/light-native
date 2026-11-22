@@ -28,6 +28,8 @@ class MainApplication : Application(), ReactApplication {
               add(LightScreenPackage())
               add(FloatingAssistantPackage())
               add(NotificationListenerPackage())
+              add(ReminderPackage())
+              add(ContactsPackage())
             }
           }
 
