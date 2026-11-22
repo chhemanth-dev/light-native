@@ -1,12 +1,13 @@
 package com.lightnative.app
 
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
+import android.content.*
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import com.facebook.react.bridge.*
+import org.json.JSONObject
 
 /**
  * AccessibilityModule - Core bridge for hands-free phone control
@@ -14,7 +15,62 @@ import com.facebook.react.bridge.*
  */
 class AccessibilityModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
+    companion object {
+        private const val ACTION_TIMEOUT_MS = 5000L
+    }
+
+    private var pendingActionPromise: Promise? = null
+    private val actionTimeoutHandler = Handler(Looper.getMainLooper())
+
     override fun getName(): String = "AccessibilityModule"
+
+    override fun initialize() {
+        super.initialize()
+        // Register broadcast receiver to get results from accessibility service
+        val filter = IntentFilter("com.lightnative.app.ACCESSIBILITY_RESULT")
+        reactContext.registerReceiver(actionResultReceiver, filter)
+    }
+
+    override fun onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy()
+        try {
+            reactContext.unregisterReceiver(actionResultReceiver)
+        } catch (e: Exception) {
+            // Receiver already unregistered
+        }
+    }
+
+    private val actionResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val success = intent.getBooleanExtra("success", false)
+            val message = intent.getStringExtra("message") ?: "Unknown result"
+            val screenText = intent.getStringArrayListExtra("screenText")
+
+            actionTimeoutHandler.removeCallbacksAndMessages(null)
+
+            if (success) {
+                if (screenText != null) {
+                    val map = WritableNativeMap()
+                    map.putBoolean("success", true)
+                    map.putString("message", message)
+                    val textArray = WritableNativeArray()
+                    screenText.forEach { textArray.pushString(it) }
+                    map.putArray("screenText", textArray)
+                    pendingActionPromise?.resolve(map)
+                } else {
+                    pendingActionPromise?.resolve(message)
+                }
+            } else {
+                pendingActionPromise?.reject("ACTION_FAILED", message)
+            }
+            pendingActionPromise = null
+        }
+    }
+
+    private fun timeoutAction() {
+        pendingActionPromise?.reject("TIMEOUT", "Action timed out after ${ACTION_TIMEOUT_MS}ms")
+        pendingActionPromise = null
+    }
 
     /**
      * Open an app by package name
@@ -238,17 +294,98 @@ class AccessibilityModule(private val reactContext: ReactApplicationContext) : R
                 return
             }
 
-            // Send action to accessibility service
-            val intent = Intent("com.lightnative.app.ACCESSIBILITY_ACTION")
-            intent.putExtra("action", action)
-            if (params != null) {
-                intent.putExtra("params", params.toHashMap().toString())
+            val service = LightAccessibilityService.instance
+            if (service == null) {
+                promise.reject("SERVICE_UNAVAILABLE", "Accessibility service not running")
+                return
+            }
+
+            // Check session
+            if (!LightAccessibilityService.isSessionActive()) {
+                // Start a 30-second session for this action
+                LightAccessibilityService.beginSession(30000)
+            }
+
+            // Store promise for async result
+            if (pendingActionPromise != null) {
+                promise.reject("BUSY", "Another action is in progress")
+                return
+            }
+            pendingActionPromise = promise
+
+            // Set timeout
+            actionTimeoutHandler.postDelayed({ timeoutAction() }, ACTION_TIMEOUT_MS)
+
+            // Execute action based on type
+            Handler(Looper.getMainLooper()).post {
+                executeAccessibilityAction(service, action, params)
+            }
+
+        } catch (e: Exception) {
+            actionTimeoutHandler.removeCallbacksAndMessages(null)
+            pendingActionPromise = null
+            promise.reject("ACTION_FAILED", "Failed to perform action: ${e.message}", e)
+        }
+    }
+
+    private fun executeAccessibilityAction(service: LightAccessibilityService, action: String, params: ReadableMap?) {
+        try {
+            val result: Boolean
+            val message: String
+            var screenText: List<String>? = null
+
+            when (action.lowercase()) {
+                "click" -> {
+                    val text = params?.getString("text") ?: ""
+                    result = service.tapText(text)
+                    message = if (result) "Clicked '$text'" else "Could not find '$text'"
+                }
+                "scroll_down" -> {
+                    result = service.scroll("down")
+                    message = if (result) "Scrolled down" else "No scrollable content"
+                }
+                "scroll_up" -> {
+                    result = service.scroll("up")
+                    message = if (result) "Scrolled up" else "No scrollable content"
+                }
+                "type_text" -> {
+                    val text = params?.getString("text") ?: ""
+                    result = service.typeText(text)
+                    message = if (result) "Typed text" else "No focused text field"
+                }
+                "back" -> {
+                    result = service.globalAction("back")
+                    message = if (result) "Pressed back" else "Back action failed"
+                }
+                "home" -> {
+                    result = service.globalAction("home")
+                    message = if (result) "Went home" else "Home action failed"
+                }
+                "read_screen" -> {
+                    screenText = service.getScreenText()
+                    result = true
+                    message = "Read ${screenText.size} elements"
+                }
+                else -> {
+                    result = false
+                    message = "Unknown action: $action"
+                }
+            }
+
+            // Send result back
+            val intent = Intent("com.lightnative.app.ACCESSIBILITY_RESULT")
+            intent.putExtra("success", result)
+            intent.putExtra("message", message)
+            if (screenText != null) {
+                intent.putStringArrayListExtra("screenText", ArrayList(screenText))
             }
             reactContext.sendBroadcast(intent)
 
-            promise.resolve("Action sent: $action")
         } catch (e: Exception) {
-            promise.reject("ACTION_FAILED", "Failed to perform action: ${e.message}", e)
+            val intent = Intent("com.lightnative.app.ACCESSIBILITY_RESULT")
+            intent.putExtra("success", false)
+            intent.putExtra("message", "Action error: ${e.message}")
+            reactContext.sendBroadcast(intent)
         }
     }
 

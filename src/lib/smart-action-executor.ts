@@ -5,6 +5,7 @@
 import { NativeModules, Platform } from 'react-native';
 import { LIGHT_CONFIG } from './light-config';
 import * as Contacts from './contacts-bridge';
+import * as UIAutomation from './ui-automation';
 
 const AccessibilityModule = Platform.OS === 'android' ? NativeModules.AccessibilityModule : null;
 
@@ -120,9 +121,19 @@ export async function playYouTubeVideo(query: string): Promise<ActionResult> {
     const searchUrl = LIGHT_CONFIG.search.youtube.replace('{query}', encodeURIComponent(query));
     await AccessibilityModule.openURL(searchUrl);
     
+    // Wait for YouTube to load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Try to click the first result automatically
+    const clickResult = await UIAutomation.clickButton('play');
+    if (!clickResult.success) {
+      // Try alternative button texts
+      await UIAutomation.clickButton('Play');
+    }
+    
     return {
       success: true,
-      message: `Searching ${query} on YouTube`,
+      message: `Playing ${query} on YouTube`,
     };
   } catch (error: any) {
     console.error('[SmartAction] YouTube failed:', error);
@@ -384,5 +395,129 @@ export async function executeSmartAction(intent: string, params: any): Promise<A
         message: `Unknown action: ${intent}`,
         error: 'UNKNOWN_ACTION',
       };
+  }
+}
+
+/**
+ * Read current screen content
+ */
+export async function readCurrentScreen(): Promise<ActionResult & { screenText?: string[] }> {
+  try {
+    const result = await UIAutomation.readScreen();
+    return {
+      success: result.success,
+      message: result.message,
+      screenText: result.screenText || [],
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Screen read failed:', error);
+    return {
+      success: false,
+      message: 'Failed to read screen',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Click a UI element by text
+ */
+export async function clickUIElement(text: string): Promise<ActionResult> {
+  try {
+    const result = await UIAutomation.clickButton(text);
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Click failed:', error);
+    return {
+      success: false,
+      message: `Failed to click "${text}"`,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Scroll in current app
+ */
+export async function scrollScreen(direction: 'up' | 'down'): Promise<ActionResult> {
+  try {
+    const result = direction === 'down' 
+      ? await UIAutomation.scrollDown()
+      : await UIAutomation.scrollUp();
+    
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Scroll failed:', error);
+    return {
+      success: false,
+      message: `Failed to scroll ${direction}`,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Type text in focused field
+ */
+export async function typeInField(text: string): Promise<ActionResult> {
+  try {
+    const result = await UIAutomation.typeText(text);
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Type failed:', error);
+    return {
+      success: false,
+      message: 'Failed to type text',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Navigate back
+ */
+export async function navigateBack(): Promise<ActionResult> {
+  try {
+    const result = await UIAutomation.pressBack();
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Back failed:', error);
+    return {
+      success: false,
+      message: 'Failed to go back',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Go to home screen
+ */
+export async function navigateHome(): Promise<ActionResult> {
+  try {
+    const result = await UIAutomation.goHome();
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  } catch (error: any) {
+    console.error('[SmartAction] Home failed:', error);
+    return {
+      success: false,
+      message: 'Failed to go home',
+      error: error.message,
+    };
   }
 }
