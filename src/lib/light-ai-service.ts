@@ -592,7 +592,6 @@ export class LightAIService {
     // Default helpful fallback
     return "I'm not entirely sure about that yet, sir. Would you like me to search the web for information, or would you prefer to teach me how to handle this?";
   }
-  }
 
   /**
    * Check if user input needs intelligent response (not just command execution)
