@@ -94,7 +94,13 @@ class FloatingOrbService : Service() {
         shape = GradientDrawable.OVAL
         setColor(0xFF6A4CFF.toInt())
       }
-      setOnClickListener { emitOrbTapped() }
+      setOnClickListener {
+        android.util.Log.d("FloatingOrb", "🎯 Orb clicked!")
+        // Visual feedback
+        alpha = 0.5f
+        postDelayed({ alpha = 1f }, 200)
+        emitOrbTapped()
+      }
     }
 
     val container = LinearLayout(this).apply {
@@ -114,7 +120,7 @@ class FloatingOrbService : Service() {
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
       type,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT
     ).apply {
       gravity = Gravity.TOP or Gravity.END
@@ -173,12 +179,61 @@ class FloatingOrbService : Service() {
 
   internal fun setStatus(text: String) {
     statusView?.text = text
+    
+    // Animate orb based on status
+    orbView?.let { orb ->
+      when {
+        text.contains("Listening", ignoreCase = true) -> {
+          // Pulsate animation for listening
+          orb.animate()
+            .scaleX(1.2f)
+            .scaleY(1.2f)
+            .setDuration(500)
+            .withEndAction {
+              orb.animate()
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .setDuration(500)
+                .start()
+            }
+            .start()
+        }
+        text.contains("Processing", ignoreCase = true) -> {
+          // Rotate animation for processing
+          orb.animate()
+            .rotation(orb.rotation + 360f)
+            .setDuration(1000)
+            .start()
+        }
+        else -> {
+          // Reset animation
+          orb.animate()
+            .scaleX(1.0f)
+            .scaleY(1.0f)
+            .rotation(0f)
+            .setDuration(300)
+            .start()
+        }
+      }
+    }
   }
 
   private fun emitOrbTapped() {
-    val ctx = reactContext ?: return
-    if (!ctx.hasActiveReactInstance()) return
-    ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-      ?.emit("FLOATING_ORB_TAPPED", null)
+    val ctx = reactContext
+    if (ctx == null) {
+      android.util.Log.w("FloatingOrb", "React context not available, cannot emit event")
+      return
+    }
+    if (!ctx.hasActiveReactInstance()) {
+      android.util.Log.w("FloatingOrb", "React instance not active, cannot emit event")
+      return
+    }
+    try {
+      ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+        ?.emit("FLOATING_ORB_TAPPED", null)
+      android.util.Log.d("FloatingOrb", "✅ Emitted FLOATING_ORB_TAPPED event")
+    } catch (e: Exception) {
+      android.util.Log.e("FloatingOrb", "Failed to emit event", e)
+    }
   }
 }
