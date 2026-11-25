@@ -292,6 +292,15 @@ export default function SettingsScreen() {
           />
         </View>
 
+        <Section title="DEBUGGING" />
+        <View style={styles.group}>
+          <Row
+            label="Error Logs"
+            onPress={() => router.push('/error-logs')}
+            value="View →"
+          />
+        </View>
+
         <Pressable style={styles.lockBtn} onPress={handleLock}>
           <Text style={styles.lockBtnText}>🔒  Lock Light</Text>
         </Pressable>

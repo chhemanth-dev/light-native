@@ -134,9 +134,15 @@ export function useAssistant() {
       (data: { error: string }) => {
         console.error("[useAssistant] onSpeechError:", data.error);
         cleanup();
+        
+        // Log error
+        import('../../src/lib/error-logger').then(({ logError }) => {
+          logError('VoiceRecognition', new Error(data.error), 'Speech recognition failed', 'VoiceRecognition');
+        });
+        
         setAssistantState("error");
         // Show the error to the user
-        setLastResponse(`Speech recognition failed: ${data.error}. Try using the TYPE INSTEAD button below.`);
+        setLastResponse(`Speech recognition failed: ${data.error}. Try using the TYPE INSTEAD button below, or check Error Logs in Settings.`);
         // Auto-return to idle after showing error
         setTimeout(() => setAssistantState("idle"), 3000);
       }

@@ -15,7 +15,6 @@ import { lightTeacher } from './light-teacher';
 import { storageManager } from './light-storage-manager';
 import { actionExecutor } from './light-action-executor';
 import { reasoningEngine } from './light-reasoning-engine';
-import { selfHealingSystem } from './light-self-healing';
 
 export interface LightAIResponse {
   text: string;
@@ -38,16 +37,7 @@ export class LightAIService {
     if (this.initialized) return;
 
     try {
-      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level + Advanced Reasoning + Self-Healing)...');
-
-      // Run proactive health check and auto-fix issues
-      const health = await selfHealingSystem.healthCheck();
-      if (health.status === 'critical') {
-        console.warn('⚠️ Critical health issues detected:', health.issues);
-        console.log('🔧 Auto-fixed:', health.autoFixedIssues);
-      } else if (health.status === 'warning') {
-        console.log('⚠️ Minor health issues:', health.issues);
-      } else {
+      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level + Advanced Reasoning)...'); else {
         console.log('✅ System health: Excellent');
       }
 
@@ -80,17 +70,9 @@ export class LightAIService {
       this.initialized = true;
       console.log('✅ Light AI Service ready! (Maximum Intelligence Mode)');
       console.log('🧠 Advanced Reasoning: ENABLED');
-      console.log('🔧 Self-Healing: ENABLED');
       console.log('🎯 Autonomous Actions: ENABLED');
     } catch (error) {
       console.error('❌ Failed to initialize Light AI Service:', error);
-      
-      // Try to self-heal initialization error
-      const repair = await selfHealingSystem.autoRepair(error as Error);
-      if (repair.fixed) {
-        console.log('🔧 Self-healed initialization:', repair.message);
-        // Retry initialization
-        this.initialized = false;
         return this.initialize();
       }
       
@@ -482,9 +464,18 @@ export class LightAIService {
           };
         } else {
           console.log('⚠️ Web search returned no useful answer');
+          
+          // Log failed web search
+          const { logError } = await import('./error-logger');
+          logError('WebSearch', new Error('No results found'), `Query: ${userMessage}`, 'WebSearch');
         }
-      } catch (searchError) {
+      } catch (searchError: any) {
         console.error('❌ Web search failed:', searchError);
+        
+        // Log web search failure
+        const { logError } = await import('./error-logger');
+        logError('WebSearch', searchError, `Query: ${userMessage}`, 'WebSearch');
+        
         // Continue to fallback
       }
 
@@ -496,21 +487,15 @@ export class LightAIService {
         source: 'fallback',
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error processing message:', error);
       
-      // SELF-HEALING: Try to automatically fix the error
-      const repair = await selfHealingSystem.autoRepair(error as Error);
-      if (repair.fixed) {
-        console.log('🔧 Self-healed error:', repair.action);
-        return {
-          text: repair.message,
-          source: 'self_healing',
-        };
-      }
+      // Log error
+      const { logError } = await import('./error-logger');
+      logError('LightAI', error, `Query: ${text}`);
       
       return {
-        text: "I ran into an error processing that. Could you try rephrasing, sir?",
+        text: "I ran into an error processing that, sir. Please check Error Logs in Settings for details.",
         source: 'fallback',
       };
     }

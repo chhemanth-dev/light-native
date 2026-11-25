@@ -29,6 +29,8 @@ import * as SmartActions from "./smart-action-executor";
 import { speak, stopSpeaking, formatMessagesForSpeech, formatReminderConfirmation } from "./voice";
 import { getUnreadMessages, markAllRead, saveTurn, forgetSession, getPendingReminders } from "./db";
 import { parseReminderFromSpeech, scheduleReminder, formatRemindersForSpeech } from "./reminders";
+import { parseSmartReminder } from "./smart-reminder-parser";
+import { logError } from "./error-logger";
 import { 
   parseReminderLocally, 
   parseAppCommandLocally, 
@@ -256,26 +258,42 @@ export class LightAssistant {
           console.log("[Assistant] 📚 Light AI suggests learning from user");
         }
         
-        await this.respond(lightResponse.text, false);
+        // Determine if response is truly offline
+        // Web search, reasoning engine, and external sources are "online"
+        const isOffline = lightResponse.source === 'pattern' || 
+                         lightResponse.source === 'local' ||
+                         lightResponse.source === 'user_taught' ||
+                         lightResponse.source === 'fallback';
+        
+        console.log("[Assistant] Response offline status:", isOffline);
+        
+        await this.respond(lightResponse.text, isOffline);
         return;
-      } catch (lightError) {
+      } catch (lightError: any) {
         console.warn("[Assistant] ⚠️ Light AI failed:", lightError);
+        
+        // Log error
+        logError('LightAI', lightError, `Query: ${userText}`, 'LightAI');
+        
         await this.respond(
-          "I'm having trouble with that, sir. Could you try asking in a different way?",
+          "I'm having trouble with that, sir. Please check Error Logs in Settings for details.",
           true
         );
         return;
       }
-    } catch (e) {
+    } catch (e: any) {
       let msg = e instanceof Error ? e.message : "Something went wrong.";
       console.error("[Assistant] ❌ ERROR:", msg);
       console.error("[Assistant] Error details:", e);
+      
+      // Log error
+      logError('Assistant', e, `Input: ${text}`);
       
       // Note: External API error handling is kept for legacy support only
       // Light AI is now the primary system and should handle everything
       
       this.setState("error");
-      this.emit({ type: "error", message: "I had trouble with that. Could you try rephrasing?" });
+      this.emit({ type: "error", message: "I had trouble with that. Check Error Logs in Settings for details." });
       setTimeout(() => this.setState("idle"), 3000);
     }
   }
@@ -702,7 +720,9 @@ export class LightAssistant {
     if (isReminderCommand(text)) {
       console.log("[Assistant] ⏰ Reminder command detected!");
       console.log("[Assistant] Raw input:", text);
-      const parsed = parseReminderLocally(text);
+      
+      // Use smart parser
+      const parsed = parseSmartReminder(text);
       console.log("[Assistant] Parsed result:", JSON.stringify(parsed));
       
       if (parsed) {
@@ -711,6 +731,8 @@ export class LightAssistant {
           console.log("[Assistant] Scheduling reminder:");
           console.log("[Assistant]  - Title:", parsed.title);
           console.log("[Assistant]  - Minutes:", parsed.minutes);
+          console.log("[Assistant]  - Action type:", parsed.actionType);
+          console.log("[Assistant]  - Target:", parsed.target);
           console.log("[Assistant]  - Fire at:", new Date(fireAt).toLocaleString());
           
           const result = await scheduleReminder({
@@ -725,20 +747,40 @@ export class LightAssistant {
           let timeDesc = '';
           if (parsed.minutes < 60) {
             timeDesc = `in ${parsed.minutes} minute${parsed.minutes !== 1 ? 's' : ''}`;
-          } else {
+          } else if (parsed.minutes < 24 * 60) {
             const hours = Math.floor(parsed.minutes / 60);
             const mins = parsed.minutes % 60;
             timeDesc = `in ${hours} hour${hours !== 1 ? 's' : ''}${mins > 0 ? ` and ${mins} minute${mins !== 1 ? 's' : ''}` : ''}`;
+          } else {
+            const days = Math.floor(parsed.minutes / (24 * 60));
+            const hours = Math.floor((parsed.minutes % (24 * 60)) / 60);
+            timeDesc = `in ${days} day${days !== 1 ? 's' : ''}${hours > 0 ? ` and ${hours} hour${hours !== 1 ? 's' : ''}` : ''}`;
           }
           
-          return `Reminder set ${timeDesc}: "${parsed.title}", sir.`;
-        } catch (error) {
+          // Format response based on action type
+          let response = `Reminder set ${timeDesc}: "${parsed.title}", sir.`;
+          if (parsed.actionType === 'call' && parsed.target) {
+            response = `I'll remind you to call ${parsed.target} ${timeDesc}, sir.`;
+          } else if (parsed.actionType === 'text' && parsed.target) {
+            response = `I'll remind you to text ${parsed.target} ${timeDesc}, sir.`;
+          } else if (parsed.actionType === 'email' && parsed.target) {
+            response = `I'll remind you to email ${parsed.target} ${timeDesc}, sir.`;
+          }
+          
+          return response;
+        } catch (error: any) {
           console.error("[Assistant] ❌ Error setting reminder:", error);
           console.error("[Assistant] Error details:", JSON.stringify(error, null, 2));
-          return `I had trouble setting that reminder, sir. Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please check if I have alarm permissions.`;
+          
+          // Log error
+          logError('ReminderCreation', error, `Input: ${text}, Parsed: ${JSON.stringify(parsed)}`);
+          
+          return `I had trouble setting that reminder, sir. Error: ${error?.message || 'Unknown error'}. Please check Error Logs in Settings for details.`;
         }
       } else {
         console.log("[Assistant] ⚠️ Could not parse reminder from:", text);
+        logError('ReminderParsing', new Error('Failed to parse reminder'), `Input: ${text}`);
+        
         return "I'm sorry, sir. I didn't understand the reminder time. Please try formats like 'remind me to call mom in 30 minutes' or 'remind me at 3pm to check email'.";
       }
     }

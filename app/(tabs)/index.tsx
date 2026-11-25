@@ -17,6 +17,7 @@ import { TranscriptBubble } from "../../src/components/TranscriptBubble";
 import { AssistantStatusBar } from "../../src/components/StatusBar";
 import { DraftReplySheet } from "../../src/components/DraftReplySheet";
 import { floatingAssistant } from "../../src/lib/floating-assistant";
+import { logError } from "../../src/lib/error-logger";
 
 function extractDraft(response: string): string | null {
   const patterns = [
@@ -55,6 +56,10 @@ export default function HomeScreen() {
     assistantState, currentTranscript, lastResponse, isOffline,
     beginSession, startListening, endCurrentSession,
   } = useAssistant();
+
+  // Error state
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   const { unreadCount, setIsOffline, ownerName } = useAppStore();
   const scrollRef  = useRef<ScrollView>(null);
@@ -142,6 +147,10 @@ export default function HomeScreen() {
     try {
       console.log("[HomeScreen] Orb pressed! State:", assistantState);
       
+      // Clear previous errors
+      setErrorMessage(null);
+      setErrorDetails(null);
+      
       if (assistantState !== "idle") {
         console.log("[HomeScreen] Ending current session");
         endCurrentSession();
@@ -154,6 +163,8 @@ export default function HomeScreen() {
       
       if (!hasMic) {
         console.log("[HomeScreen] Mic denied, returning");
+        setErrorMessage("Microphone permission denied");
+        setErrorDetails("Light needs microphone access to hear your voice commands. Please grant permission in settings.");
         return;
       }
       
@@ -163,9 +174,34 @@ export default function HomeScreen() {
       console.log("[HomeScreen] Starting listening...");
       await startListening();
       console.log("[HomeScreen] Listening started");
-    } catch (e) {
+    } catch (e: any) {
       console.error("[HomeScreen] Error in handleOrbPress:", e);
-      // Silently ignore — user can tap again
+      
+      // Log error
+      logError('OrbPress', e, `State: ${assistantState}, MicGranted: ${micGranted}`);
+      
+      // Show detailed error to user
+      setErrorMessage("Failed to start voice assistant");
+      
+      // Parse error details
+      let details = e?.message || String(e);
+      if (details.includes("Audio recording")) {
+        details = "Audio recording error. Check if another app is using the microphone, or restart your phone.";
+      } else if (details.includes("permission")) {
+        details = "Permission issue. Please check app permissions in Settings.";
+      } else if (details.includes("Speech")) {
+        details = "Speech recognition error. Make sure Google Speech Services is updated.";
+      } else if (!details || details === "[object Object]") {
+        details = "Unknown error. Check Error Logs in Settings for details.";
+      }
+      
+      setErrorDetails(details);
+      
+      // Log full error for debugging
+      console.error("[HomeScreen] Full error object:", JSON.stringify(e, null, 2));
+      console.error("[HomeScreen] Error name:", e?.name);
+      console.error("[HomeScreen] Error message:", e?.message);
+      console.error("[HomeScreen] Error stack:", e?.stack);
     }
   }
 
@@ -277,6 +313,39 @@ export default function HomeScreen() {
         )}
         <TranscriptBubble transcript={currentTranscript} response={lastResponse} isOffline={isOffline} />
       </ScrollView>
+
+      {/* Error Display */}
+      {errorMessage && (
+        <View style={styles.errorContainer}>
+          <View style={styles.errorHeader}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorTitle}>{errorMessage}</Text>
+            <Pressable 
+              style={styles.errorClose}
+              onPress={() => { setErrorMessage(null); setErrorDetails(null); }}
+            >
+              <Text style={styles.errorCloseText}>✕</Text>
+            </Pressable>
+          </View>
+          {errorDetails && (
+            <Text style={styles.errorDetails}>{errorDetails}</Text>
+          )}
+          <View style={styles.errorActions}>
+            <Pressable 
+              style={styles.errorBtn}
+              onPress={() => { setErrorMessage(null); setErrorDetails(null); handleOrbPress(); }}
+            >
+              <Text style={styles.errorBtnText}>Try Again</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.errorBtn, styles.errorBtnSecondary]}
+              onPress={() => setShowTextInput(true)}
+            >
+              <Text style={[styles.errorBtnText, styles.errorBtnTextSecondary]}>Type Instead</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* Orb */}
       <View style={styles.orbArea}>
@@ -458,4 +527,68 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 12, alignItems: "center",
   },
   endBtnText: { color: "#FCA5A5", fontSize: 13, fontWeight: "600" },
+  
+  // Error Display
+  errorContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: "#1F1410",
+    borderWidth: 1,
+    borderColor: "#DC2626",
+    borderRadius: 12,
+    padding: 16,
+  },
+  errorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  errorIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  errorTitle: {
+    flex: 1,
+    color: "#FCA5A5",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  errorClose: {
+    padding: 4,
+  },
+  errorCloseText: {
+    color: "#DC2626",
+    fontSize: 20,
+    fontWeight: "300",
+  },
+  errorDetails: {
+    color: "#F87171",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  errorActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  errorBtn: {
+    flex: 1,
+    backgroundColor: "#DC2626",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+  },
+  errorBtnSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#DC2626",
+  },
+  errorBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  errorBtnTextSecondary: {
+    color: "#FCA5A5",
+  },
 });
