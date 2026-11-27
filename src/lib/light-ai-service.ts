@@ -71,9 +71,6 @@ export class LightAIService {
       console.log('🎯 Autonomous Actions: ENABLED');
     } catch (error) {
       console.error('❌ Failed to initialize Light AI Service:', error);
-        return this.initialize();
-      }
-      
       throw error;
     }
   }
