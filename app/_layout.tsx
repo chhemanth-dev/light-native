@@ -77,7 +77,9 @@ export default function RootLayout() {
           setInitialRoute("/lock");
         }
       } catch (err) {
-        console.error("Error during app initialization:", err);
+        console.error("❌ CRITICAL ERROR during app initialization:", err);
+        // Set error with details so user can see what failed
+        setError(err as any);
         // If anything fails, go to setup so the user isn't stuck
         setInitialRoute("/setup");
       } finally {
@@ -107,7 +109,11 @@ export default function RootLayout() {
     return (
       <GestureHandlerRootView style={styles.root}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Something went wrong starting Light.</Text>
+          <Text style={styles.errorTitle}>Light Failed to Start</Text>
+          <Text style={styles.errorText}>Something went wrong during initialization.</Text>
+          {error && typeof error === 'object' && 'message' in error && (
+            <Text style={styles.errorDetails}>{String(error.message)}</Text>
+          )}
           <Pressable style={styles.retryBtn} onPress={() => {
             setError(false);
             setReady(false);
@@ -142,13 +148,16 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#050810" },
-  errorContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20 },
+  errorContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 20 },
+  errorTitle: { color: "#EF4444", fontSize: 18, fontWeight: "bold", textAlign: "center" },
   errorText: { color: "#64748B", fontSize: 14, textAlign: "center" },
+  errorDetails: { color: "#94A3B8", fontSize: 12, textAlign: "center", fontFamily: "monospace", marginTop: 8 },
   retryBtn: {
     backgroundColor: "#1D4ED8",
     borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 14,
+    marginTop: 12,
   },
   retryText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });
