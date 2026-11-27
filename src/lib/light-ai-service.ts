@@ -37,9 +37,7 @@ export class LightAIService {
     if (this.initialized) return;
 
     try {
-      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level + Advanced Reasoning)...'); else {
-        console.log('✅ System health: Excellent');
-      }
+      console.log('🚀 Initializing Light AI Service (ChatGPT-5 level + Advanced Reasoning)...');
 
       // Initialize conversation engine for deep understanding
       await conversationEngine.initialize();
