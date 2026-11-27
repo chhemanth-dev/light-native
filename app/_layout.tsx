@@ -52,7 +52,8 @@ export default function RootLayout() {
         }
         
         // Initialize Light AI training data (on first launch)
-        console.log("[RootLayout] 🚀 Initializing Light AI training...");
+        // Run in background - don't await, don't block startup
+        console.log("[RootLayout] 🚀 Starting Light AI training (background)...");
         initializeTraining().catch(err => {
           console.warn("[RootLayout] ⚠️ Light AI training initialization failed:", err);
           // Don't block app startup if training fails
